@@ -1,6 +1,6 @@
 :root {
-  color: #1d2528;
-  background: #f4f1ea;
+  color: #1b2529;
+  background: #eef3f2;
   font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
     sans-serif;
@@ -13,6 +13,9 @@
 }
 
 body {
+  background:
+    linear-gradient(135deg, rgba(21, 83, 94, 0.13), rgba(237, 245, 242, 0) 34%),
+    linear-gradient(180deg, #f7faf8 0%, #eef3f2 44%, #e7edeb 100%);
   margin: 0;
   min-width: 320px;
 }
@@ -25,20 +28,39 @@ select {
 
 .app-shell {
   min-height: 100vh;
-  padding: 24px;
+  padding: 28px;
 }
 
 .page-header {
-  align-items: end;
+  align-items: center;
+  background: #143b45;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 8px;
+  box-shadow: 0 22px 60px rgba(25, 52, 58, 0.18);
+  color: #ffffff;
   display: flex;
   gap: 16px;
   justify-content: space-between;
-  margin: 0 auto 18px;
+  margin: 0 auto 16px;
   max-width: 1500px;
+  overflow: hidden;
+  padding: 26px 30px;
+  position: relative;
+}
+
+.page-header::after {
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0));
+  content: "";
+  height: 100%;
+  position: absolute;
+  right: -15%;
+  top: 0;
+  transform: skewX(-22deg);
+  width: 48%;
 }
 
 .eyebrow {
-  color: #5f6d74;
+  color: #9ed4d0;
   font-size: 0.78rem;
   font-weight: 700;
   letter-spacing: 0;
@@ -54,6 +76,8 @@ h2 {
 h1 {
   font-size: clamp(2rem, 4vw, 3.4rem);
   line-height: 1;
+  position: relative;
+  z-index: 1;
 }
 
 h2 {
@@ -61,23 +85,27 @@ h2 {
 }
 
 .data-pill {
-  background: #163b45;
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.24);
   border-radius: 999px;
   color: #fff;
   flex: 0 0 auto;
   font-size: 0.9rem;
   font-weight: 700;
   padding: 10px 14px;
+  position: relative;
+  z-index: 1;
 }
 
 .filter-panel {
-  background: #ffffff;
-  border: 1px solid #d5ddd9;
+  backdrop-filter: blur(18px);
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(189, 204, 201, 0.78);
   border-radius: 8px;
-  box-shadow: 0 18px 40px rgba(30, 48, 55, 0.12);
+  box-shadow: 0 18px 42px rgba(30, 48, 55, 0.13);
   margin: 0 auto 18px;
   max-width: 1500px;
-  padding: 16px;
+  padding: 18px;
   position: sticky;
   top: 0;
   z-index: 5;
@@ -97,26 +125,38 @@ label {
 }
 
 label span {
-  color: #44535a;
+  color: #465a60;
   font-size: 0.78rem;
   font-weight: 700;
 }
 
 input,
 select {
-  background: #fbfcfb;
-  border: 1px solid #bbc8c4;
+  background: #f8fbfa;
+  border: 1px solid #b8c9c5;
   border-radius: 6px;
   color: #1d2528;
-  min-height: 40px;
-  padding: 8px 10px;
+  min-height: 42px;
+  padding: 9px 11px;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease;
   width: 100%;
+}
+
+input:hover,
+select:hover {
+  background: #ffffff;
+  border-color: #8fb0aa;
 }
 
 input:focus,
 select:focus {
-  border-color: #1d6f80;
-  outline: 3px solid rgba(29, 111, 128, 0.18);
+  background: #ffffff;
+  border-color: #1d7180;
+  box-shadow: 0 0 0 4px rgba(29, 113, 128, 0.14);
+  outline: none;
 }
 
 .filter-actions {
@@ -128,19 +168,31 @@ select:focus {
 }
 
 button {
-  background: #1d6f80;
-  border: 1px solid #1d6f80;
+  background: #155e6b;
+  border: 1px solid #155e6b;
   border-radius: 6px;
+  box-shadow: 0 8px 18px rgba(21, 94, 107, 0.18);
   color: #fff;
   cursor: pointer;
   font-weight: 800;
-  min-height: 40px;
-  padding: 8px 14px;
+  min-height: 42px;
+  padding: 9px 15px;
+  transition:
+    background 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+
+button:hover:not(:disabled) {
+  background: #104f5b;
+  box-shadow: 0 10px 22px rgba(21, 94, 107, 0.24);
+  transform: translateY(-1px);
 }
 
 button.secondary {
   background: #ffffff;
-  color: #1d6f80;
+  box-shadow: none;
+  color: #155e6b;
 }
 
 button:disabled {
@@ -149,9 +201,13 @@ button:disabled {
 }
 
 .error-text {
+  background: #fff2f2;
+  border: 1px solid #ffcaca;
+  border-radius: 6px;
   color: #a63535;
   font-weight: 700;
   margin: 0;
+  padding: 9px 11px;
 }
 
 .content-grid {
@@ -165,14 +221,15 @@ button:disabled {
 
 .results-area,
 .summary-panel {
-  background: #ffffff;
-  border: 1px solid #d5ddd9;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid rgba(197, 211, 208, 0.92);
   border-radius: 8px;
+  box-shadow: 0 12px 34px rgba(32, 54, 58, 0.1);
 }
 
 .results-area {
   min-width: 0;
-  padding: 14px;
+  padding: 16px;
 }
 
 .result-toolbar {
@@ -183,6 +240,8 @@ button:disabled {
 }
 
 .table-wrap {
+  border: 1px solid #d7e2df;
+  border-radius: 8px;
   max-height: calc(100vh - 330px);
   min-height: 360px;
   overflow: auto;
@@ -197,16 +256,16 @@ table {
 
 th,
 td {
-  border-bottom: 1px solid #e3e9e6;
+  border-bottom: 1px solid #e2eae7;
   font-size: 0.9rem;
-  padding: 10px;
+  padding: 11px 12px;
   text-align: left;
   vertical-align: top;
 }
 
 th {
-  background: #e9efec;
-  color: #334148;
+  background: #dfe9e6;
+  color: #2f4348;
   font-size: 0.78rem;
   font-weight: 800;
   position: sticky;
@@ -215,16 +274,23 @@ th {
 }
 
 .row-possible td {
-  background: #edf8ef;
+  background: #eef9f1;
+  border-bottom-color: #d4ead9;
 }
 
 .row-not-possible td {
-  background: #fff0f0;
+  background: #fff3f2;
+  border-bottom-color: #f2d8d5;
 }
 
 .row-no-data td {
-  background: #f1f3f3;
+  background: #f2f5f5;
+  border-bottom-color: #dde5e4;
   color: #59666b;
+}
+
+tbody tr:hover td {
+  filter: brightness(0.985);
 }
 
 .status-dot {
@@ -232,13 +298,15 @@ th {
   display: inline-flex;
   font-size: 0.78rem;
   font-weight: 800;
-  padding: 5px 8px;
+  justify-content: center;
+  min-width: 92px;
+  padding: 5px 9px;
   white-space: nowrap;
 }
 
 .status-possible {
-  background: #c9f0d0;
-  color: #17662c;
+  background: #c8efd2;
+  color: #11602a;
 }
 
 .status-not-possible {
@@ -254,14 +322,19 @@ th {
 .empty-cell {
   color: #637177;
   height: 160px;
+  font-weight: 700;
   text-align: center;
   vertical-align: middle;
 }
 
 .summary-panel {
-  padding: 16px;
+  padding: 18px;
   position: sticky;
   top: 166px;
+}
+
+.summary-panel h2 {
+  color: #173c45;
 }
 
 dl {
@@ -272,10 +345,12 @@ dl {
 
 dl div {
   align-items: center;
-  border-bottom: 1px solid #e2e8e5;
+  background: #f6faf8;
+  border: 1px solid #e0e9e6;
+  border-radius: 8px;
   display: flex;
   justify-content: space-between;
-  padding-bottom: 10px;
+  padding: 11px 12px;
 }
 
 dt {
@@ -285,6 +360,7 @@ dt {
 }
 
 dd {
+  color: #155e6b;
   font-size: 1.35rem;
   font-weight: 900;
   margin: 0;

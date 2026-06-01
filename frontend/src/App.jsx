@@ -248,8 +248,8 @@ function App() {
   function submitAnalysis(event) {
     event.preventDefault();
     const rank = Number(filters.rank);
-    if (!filters.year || !filters.round_no || !Number.isInteger(rank) || rank <= 0) {
-      setError("Choose a year, round, and positive integer rank before analyzing.");
+    if (!filters.year || !Number.isInteger(rank) || rank <= 0) {
+      setError("Choose a year and positive integer rank before analyzing.");
       return;
     }
     setError("");
@@ -280,8 +280,8 @@ function App() {
           </label>
           <label>
             <span>{labels.round_no}</span>
-            <select value={filters.round_no} onChange={(event) => updateFilter("round_no", event.target.value)} required>
-              <option value="">Select round</option>
+            <select value={filters.round_no} onChange={(event) => updateFilter("round_no", event.target.value)}>
+              <option value="">All rounds</option>
               {roundOptions.map((round) => (
                 <option key={round} value={round}>Round {round}</option>
               ))}
@@ -369,6 +369,7 @@ function App() {
               <thead>
                 <tr>
                   <th>Status</th>
+                  <th>Round</th>
                   <th>Institute</th>
                   <th>Program</th>
                   <th>Quota</th>
@@ -381,11 +382,12 @@ function App() {
               </thead>
               <tbody>
                 {!submitted ? (
-                  <tr><td colSpan="9" className="empty-cell">Enter the mandatory filters and submit to analyze results.</td></tr>
+                  <tr><td colSpan="10" className="empty-cell">Enter a year and rank, then submit to analyze results.</td></tr>
                 ) : visibleResults.length ? (
                   visibleResults.map((row, index) => (
                     <tr key={`${row.year}-${row.round_no}-${row.institute}-${row.academic_program}-${row.quota}-${row.seat_type}-${row.gender_pool}-${index}`} className={`row-${row.status}`}>
                       <td><span className={`status-dot status-${row.status}`}>{statusLabel(row.status)}</span></td>
+                      <td>Round {row.round_no}</td>
                       <td>{row.institute}</td>
                       <td>{row.academic_program}</td>
                       <td>{row.quota}</td>
@@ -397,7 +399,7 @@ function App() {
                     </tr>
                   ))
                 ) : (
-                  <tr><td colSpan="9" className="empty-cell">No rows match the current result filters.</td></tr>
+                  <tr><td colSpan="10" className="empty-cell">No rows match the current result filters.</td></tr>
                 )}
               </tbody>
             </table>
@@ -414,7 +416,8 @@ function App() {
           </dl>
           {submitted ? (
             <p>
-              Rank {submitted.rank.toLocaleString()} compared against {submitted.rankBasis === "closing_rank" ? "closing" : "opening"} ranks for {submitted.year}, round {submitted.round_no}.
+              Rank {submitted.rank.toLocaleString()} compared against {submitted.rankBasis === "closing_rank" ? "closing" : "opening"} ranks for {submitted.year}
+              {submitted.round_no ? `, round ${submitted.round_no}` : ", all rounds"}.
             </p>
           ) : (
             <p>Submit a rank analysis to populate possible, not possible, and missing cutoff groups.</p>
