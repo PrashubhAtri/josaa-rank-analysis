@@ -193,6 +193,11 @@ function specialOptionRank(fieldKey, value) {
   return 1000;
 }
 
+function presetIsSelected(selected, values) {
+  const selectedSet = new Set(selectedValues(selected));
+  return values.length > 0 && values.every((value) => selectedSet.has(value));
+}
+
 function rowMatchesSearch(searchIndex, row, query) {
   const tokens = searchTokens(query);
   if (!tokens.length) return true;
@@ -469,13 +474,13 @@ function MultiSelectFilter({
             <span>Quick picks</span>
             <div className="preset-actions">
               {specialPresets.map((preset) => (
-                <button
-                  key={preset.label}
-                  type="button"
-                  className="preset-button"
-                  onClick={() => onChange(preset.values)}
-                  disabled={disabled}
-                >
+              <button
+                key={preset.label}
+                type="button"
+                className={`preset-button${presetIsSelected(selectedList, preset.values) ? " is-active" : ""}`}
+                onClick={() => onChange(preset.values)}
+                disabled={disabled}
+              >
                   {preset.label}
                 </button>
               ))}
@@ -754,12 +759,21 @@ function App() {
       <form className="filter-panel" onSubmit={submitAnalysis}>
         <div className="quick-strip">
           {topInstitutePresets.map((preset) => (
-            <button key={preset.label} type="button" className="quick-chip" onClick={() => applyPreset("institute", preset.values)}>
+            <button
+              key={preset.label}
+              type="button"
+              className={`quick-chip${presetIsSelected(filters.institute, preset.values) ? " is-active" : ""}`}
+              onClick={() => applyPreset("institute", preset.values)}
+            >
               {preset.label}
             </button>
           ))}
           {topFieldPreset ? (
-            <button type="button" className="quick-chip" onClick={() => applyPreset("academic_program", topFieldPreset.values)}>
+            <button
+              type="button"
+              className={`quick-chip${presetIsSelected(filters.academic_program, topFieldPreset.values) ? " is-active" : ""}`}
+              onClick={() => applyPreset("academic_program", topFieldPreset.values)}
+            >
               Top fields
             </button>
           ) : null}

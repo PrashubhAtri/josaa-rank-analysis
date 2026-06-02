@@ -189,10 +189,19 @@ select:focus {
 }
 
 .multi-menu {
+  background: #ffffff;
   border-top: 1px solid var(--line);
+  border-radius: 0 0 8px 8px;
+  box-shadow: 0 16px 34px rgba(45, 3, 59, 0.16);
   display: grid;
   gap: 8px;
+  left: 0;
+  min-width: min(520px, calc(100vw - 32px));
   padding: 9px;
+  position: absolute;
+  top: calc(100% - 1px);
+  width: max(100%, min(520px, calc(100vw - 32px)));
+  z-index: 12;
 }
 
 .multi-filter legend {
@@ -203,12 +212,14 @@ select:focus {
 }
 
 .multi-search {
-  min-height: 34px;
-  padding: 7px 9px;
+  font-size: 0.9rem;
+  min-height: 40px;
+  padding: 8px 10px;
 }
 
 .multi-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 7px;
 }
 
@@ -249,6 +260,12 @@ select:focus {
   box-shadow: none;
 }
 
+.preset-button.is-active {
+  background: var(--accent);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(193, 71, 233, 0.18);
+}
+
 .mini-button {
   box-shadow: none;
   font-size: 0.76rem;
@@ -273,9 +290,9 @@ select:focus {
   border-radius: 7px;
   display: grid;
   gap: 2px;
-  max-height: 144px;
+  max-height: min(330px, 45vh);
   overflow: auto;
-  padding: 5px;
+  padding: 6px;
 }
 
 .check-option {
@@ -284,7 +301,7 @@ select:focus {
   display: grid;
   gap: 8px;
   grid-template-columns: 16px minmax(0, 1fr);
-  padding: 4px;
+  padding: 7px 6px;
 }
 
 .check-option:hover {
@@ -301,9 +318,10 @@ select:focus {
 
 .check-option span {
   color: #26363b;
-  font-size: 0.82rem;
+  font-size: 0.86rem;
   font-weight: 600;
   line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 .option-limit {
@@ -330,6 +348,18 @@ select:focus {
   border-color: var(--soft);
   box-shadow: none;
   color: var(--primary);
+}
+
+.quick-chip.is-active {
+  background: var(--accent);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(193, 71, 233, 0.18);
+  color: #ffffff;
+}
+
+.preset-button.is-active:hover:not(:disabled),
+.quick-chip.is-active:hover:not(:disabled) {
+  background: #a52bcc;
 }
 
 .toggle-line {
@@ -897,6 +927,13 @@ dd {
 
   .multi-filter[open] {
     grid-column: 1 / -1;
+  }
+
+  .multi-menu {
+    box-shadow: none;
+    min-width: 0;
+    position: static;
+    width: 100%;
   }
 
   .option-list {
