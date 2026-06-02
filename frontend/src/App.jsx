@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 const ALL = "ALL";
 
@@ -436,6 +436,7 @@ function MultiSelectFilter({
   onChange,
   onSearchChange,
 }) {
+  const [isOpen, setIsOpen] = useState(false);
   const selectedList = selectedValues(selected);
   const visibleOptions = options
     .filter((value) => optionMatchesSearch(searchIndex, fieldKey, value, searchValue))
@@ -459,8 +460,17 @@ function MultiSelectFilter({
   }
 
   return (
-    <details className={`multi-filter${disabled ? " is-disabled" : ""}`}>
-      <summary>{label}</summary>
+    <div className={`multi-filter${disabled ? " is-disabled" : ""}${isOpen ? " is-open" : ""}`}>
+      <button
+        type="button"
+        className="multi-trigger"
+        onClick={() => setIsOpen((current) => !current)}
+        disabled={disabled}
+      >
+        <span>{label}</span>
+        {selectedList.length ? <strong>{selectedList.length}</strong> : null}
+      </button>
+      {isOpen ? (
       <div className="multi-menu">
         <input
           className="multi-search"
@@ -513,11 +523,13 @@ function MultiSelectFilter({
           {!visibleOptions.length ? <p className="option-limit">No matching options.</p> : null}
         </div>
       </div>
-    </details>
+      ) : null}
+    </div>
   );
 }
 
 function App() {
+  const didAutoSubmitFromUrl = useRef(false);
   const [yearRows, setYearRows] = useState({});
   const [availableYears, setAvailableYears] = useState([]);
   const [searchIndex, setSearchIndex] = useState({});
@@ -560,6 +572,9 @@ function App() {
       setYearLoadState("idle");
       return;
     }
+    if (loadState !== "ready" || !availableYears.length) {
+      return;
+    }
 
     const yearsToLoad = [...new Set([filters.year, ...selectedValues(filters.compare_years)].filter(Boolean).map(String))];
     const missingYears = yearsToLoad.filter((year) => !yearRows[year]);
@@ -596,9 +611,9 @@ function App() {
       });
 
     return () => controller.abort();
-  }, [filters.year, filters.compare_years, availableYears, yearRows]);
+  }, [filters.year, filters.compare_years, availableYears, yearRows, loadState]);
 
-  const yearOptions = useMemo(() => sortText(new Set(availableYears.map((entry) => entry.year))).reverse(), [availableYears]);
+  const yearOptions = useMemo(() => sortText(new Set(availableYears.map((entry) => String(entry.year)))).reverse(), [availableYears]);
   const rows = useMemo(() => yearRows[String(filters.year)] || [], [yearRows, filters.year]);
   const analysisRows = useMemo(() => {
     const years = [...new Set([filters.year, ...selectedValues(filters.compare_years)].filter(Boolean).map(String))];
@@ -723,6 +738,25 @@ function App() {
     setResultFilterSearches(emptyFilterSearches);
     window.setTimeout(() => setIsAnalyzing(false), 120);
   }
+
+  useEffect(() => {
+    const rank = Number(filters.rank);
+    if (
+      didAutoSubmitFromUrl.current ||
+      !window.location.search ||
+      !filters.year ||
+      !Number.isInteger(rank) ||
+      rank <= 0 ||
+      yearLoadState !== "ready"
+    ) {
+      return;
+    }
+
+    didAutoSubmitFromUrl.current = true;
+    setSubmitted({ ...filters, rank });
+    setResultFilters(emptyResultFilters);
+    setResultFilterSearches(emptyFilterSearches);
+  }, [filters, yearLoadState]);
 
   function dataStatusLabel() {
     if (loadState === "loading") return "Loading data index";

@@ -103,6 +103,7 @@ h2 {
 
 .filter-grid,
 .result-toolbar {
+  align-items: start;
   display: grid;
   gap: 10px;
   grid-template-columns: repeat(auto-fit, minmax(clamp(180px, 12vw, 260px), 1fr));
@@ -112,6 +113,7 @@ label {
   display: grid;
   gap: 6px;
   min-width: 0;
+  align-self: start;
 }
 
 label span {
@@ -161,31 +163,41 @@ select:focus {
   opacity: 0.62;
 }
 
-.multi-filter summary {
+.multi-trigger {
   align-items: center;
+  background: #ffffff;
+  border: 0;
+  box-shadow: none;
   color: var(--ink);
   cursor: pointer;
   display: flex;
   font-size: 0.9rem;
   font-weight: 800;
   justify-content: space-between;
-  list-style: none;
   min-height: 38px;
   padding: 8px 10px;
+  width: 100%;
 }
 
-.multi-filter summary::-webkit-details-marker {
-  display: none;
-}
-
-.multi-filter summary::after {
+.multi-trigger::after {
   color: var(--primary);
   content: "v";
   font-size: 0.82rem;
 }
 
-.multi-filter[open] summary::after {
+.multi-filter.is-open .multi-trigger::after {
   transform: rotate(180deg);
+}
+
+.multi-trigger strong {
+  background: var(--primary);
+  border-radius: 999px;
+  color: #ffffff;
+  font-size: 0.72rem;
+  line-height: 1;
+  margin-left: auto;
+  margin-right: 8px;
+  padding: 4px 6px;
 }
 
 .multi-menu {
@@ -921,11 +933,11 @@ dd {
   button,
   input,
   select,
-  .multi-filter summary {
+  .multi-trigger {
     min-height: 42px;
   }
 
-  .multi-filter[open] {
+  .multi-filter.is-open {
     grid-column: 1 / -1;
   }
 
