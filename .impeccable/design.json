@@ -1,0 +1,250 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-06-02T03:15:00Z",
+  "title": "Design System: JoSAA Rank Analysis",
+  "extensions": {
+    "colorMeta": {
+      "ink": {
+        "role": "neutral",
+        "displayName": "Console Ink",
+        "canonical": "#171717",
+        "tonalRamp": ["#0a0a0a", "#171717", "#262626", "#404040", "#737373", "#a3a3a3", "#d4d4d4", "#fafafa"]
+      },
+      "primary": {
+        "role": "primary",
+        "displayName": "Graphite Command",
+        "canonical": "#18181b",
+        "tonalRamp": ["#09090b", "#18181b", "#27272a", "#3f3f46", "#71717a", "#a1a1aa", "#d4d4d8", "#fafafa"]
+      },
+      "focus": {
+        "role": "primary",
+        "displayName": "Focus Blue",
+        "canonical": "#2563eb",
+        "tonalRamp": ["#172554", "#1e3a8a", "#1d4ed8", "#2563eb", "#3b82f6", "#93c5fd", "#dbeafe", "#eff6ff"]
+      },
+      "app-bg": {
+        "role": "neutral",
+        "displayName": "App Field",
+        "canonical": "#f6f7f9",
+        "tonalRamp": ["#111827", "#1f2937", "#374151", "#6b7280", "#9ca3af", "#d1d5db", "#e5e7eb", "#f9fafb"]
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "Working Surface",
+        "canonical": "#ffffff",
+        "tonalRamp": ["#202124", "#3f3f46", "#52525b", "#71717a", "#a1a1aa", "#d4d4d8", "#f4f4f5", "#ffffff"]
+      },
+      "line": {
+        "role": "neutral",
+        "displayName": "Hairline",
+        "canonical": "#e5e7eb",
+        "tonalRamp": ["#111827", "#374151", "#4b5563", "#6b7280", "#9ca3af", "#d1d5db", "#e5e7eb", "#f9fafb"]
+      },
+      "possible-bg": {
+        "role": "tertiary",
+        "displayName": "Possible Green",
+        "canonical": "#ecfdf3",
+        "tonalRamp": ["#052e16", "#14532d", "#166534", "#16a34a", "#4ade80", "#86efac", "#bbf7d0", "#f0fdf4"]
+      },
+      "not-possible-bg": {
+        "role": "tertiary",
+        "displayName": "Reach Rose",
+        "canonical": "#fff1f2",
+        "tonalRamp": ["#4c0519", "#881337", "#be123c", "#e11d48", "#fb7185", "#fda4af", "#fecdd3", "#fff1f2"]
+      },
+      "no-data-bg": {
+        "role": "neutral",
+        "displayName": "No Data Grey",
+        "canonical": "#f3f4f6",
+        "tonalRamp": ["#111827", "#374151", "#4b5563", "#6b7280", "#9ca3af", "#d1d5db", "#e5e7eb", "#f9fafb"]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Top-level context only, never marketing hero type."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Panel, sheet, and summary headings."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Result cards, table modules, and compact section names."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Tables, cards, forms, details, and helper copy."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Form labels, table headers, badges, and compact metadata."
+      }
+    },
+    "shadows": [
+      {
+        "name": "control-hairline",
+        "value": "0 1px 1px rgba(17, 24, 39, 0.04)",
+        "purpose": "Buttons, inputs, selects, and badges."
+      },
+      {
+        "name": "panel-lift",
+        "value": "0 1px 2px rgba(17, 24, 39, 0.06), 0 8px 24px rgba(17, 24, 39, 0.06)",
+        "purpose": "Filter panel, results panel, summary panel, and cards."
+      },
+      {
+        "name": "popover-lift",
+        "value": "0 10px 28px rgba(17, 24, 39, 0.12)",
+        "purpose": "Dropdowns, command-like search surfaces, and option menus."
+      },
+      {
+        "name": "sheet-lift",
+        "value": "0 24px 60px rgba(17, 24, 39, 0.18)",
+        "purpose": "Right-side detail sheet and blocking overlays."
+      },
+      {
+        "name": "focus-ring",
+        "value": "0 0 0 3px rgba(37, 99, 235, 0.18)",
+        "purpose": "Keyboard focus and active fields."
+      }
+    ],
+    "motion": [
+      {
+        "name": "state-fast",
+        "value": "140ms cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "Default shadcn-style hover, active, and focus transitions."
+      },
+      {
+        "name": "sheet-enter",
+        "value": "180ms cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "Sheet and popover entry."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "tablet-stack",
+        "value": "1000px"
+      },
+      {
+        "name": "mobile-cards",
+        "value": "760px"
+      },
+      {
+        "name": "narrow-summary",
+        "value": "520px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "shadcn-style primary command button for rank analysis.",
+      "html": "<button class=\"ds-btn-primary\">Analyze rank</button>",
+      "css": ".ds-btn-primary { background: #18181b; border: 1px solid #18181b; border-radius: 8px; box-shadow: 0 1px 1px rgba(17, 24, 39, 0.04); color: #fff; cursor: pointer; font: 600 0.875rem Inter, ui-sans-serif, system-ui, sans-serif; height: 36px; padding: 0 14px; transition: background 140ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 140ms cubic-bezier(0.16, 1, 0.3, 1), transform 140ms cubic-bezier(0.16, 1, 0.3, 1); } .ds-btn-primary:hover { background: #27272a; transform: translateY(-1px); } .ds-btn-primary:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.18); }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Neutral outline action for share, reset, and export.",
+      "html": "<button class=\"ds-btn-secondary\">Copy/share link</button>",
+      "css": ".ds-btn-secondary { background: #ffffff; border: 1px solid #e5e7eb; border-radius: 8px; box-shadow: 0 1px 1px rgba(17, 24, 39, 0.04); color: #262626; cursor: pointer; font: 600 0.875rem Inter, ui-sans-serif, system-ui, sans-serif; height: 36px; padding: 0 14px; transition: background 140ms cubic-bezier(0.16, 1, 0.3, 1), border-color 140ms cubic-bezier(0.16, 1, 0.3, 1); } .ds-btn-secondary:hover { background: #f1f3f5; border-color: #d1d5db; } .ds-btn-secondary:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.18); }"
+    },
+    {
+      "name": "Text Input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "shadcn Input baseline for rank, search, and filter narrowing.",
+      "html": "<label class=\"ds-field\"><span>Rank</span><input value=\"5432\" /></label>",
+      "css": ".ds-field { display: grid; gap: 6px; min-width: 0; } .ds-field span { color: #6b7280; font: 600 0.75rem Inter, ui-sans-serif, system-ui, sans-serif; } .ds-field input { background: #ffffff; border: 1px solid #e5e7eb; border-radius: 8px; box-shadow: 0 1px 1px rgba(17, 24, 39, 0.04); color: #262626; font: 400 0.875rem Inter, ui-sans-serif, system-ui, sans-serif; height: 36px; padding: 0 10px; transition: border-color 140ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 140ms cubic-bezier(0.16, 1, 0.3, 1); width: 100%; } .ds-field input:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.18); outline: none; }"
+    },
+    {
+      "name": "Filter Badge",
+      "kind": "chip",
+      "refersTo": "status-pill",
+      "description": "Neutral shadcn Badge for quick filters and selected values.",
+      "html": "<button class=\"ds-badge\">Top 7 IITs</button>",
+      "css": ".ds-badge { background: #ffffff; border: 1px solid #e5e7eb; border-radius: 999px; box-shadow: 0 1px 1px rgba(17, 24, 39, 0.04); color: #262626; cursor: pointer; font: 600 0.75rem Inter, ui-sans-serif, system-ui, sans-serif; height: 28px; padding: 0 10px; transition: background 140ms cubic-bezier(0.16, 1, 0.3, 1), border-color 140ms cubic-bezier(0.16, 1, 0.3, 1); } .ds-badge:hover { background: #f1f3f5; border-color: #d1d5db; } .ds-badge:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.18); }"
+    },
+    {
+      "name": "Status Badge",
+      "kind": "chip",
+      "refersTo": "status-pill",
+      "description": "Text-first semantic badge for result possibility.",
+      "html": "<span class=\"ds-status ds-status-possible\">Possible</span>",
+      "css": ".ds-status { border: 1px solid transparent; border-radius: 999px; display: inline-flex; font: 600 0.75rem Inter, ui-sans-serif, system-ui, sans-serif; height: 24px; align-items: center; justify-content: center; padding: 0 9px; white-space: nowrap; } .ds-status-possible { background: #ecfdf3; border-color: #bbf7d0; color: #166534; } .ds-status-not-possible { background: #fff1f2; border-color: #fecdd3; color: #be123c; } .ds-status-no-data { background: #f3f4f6; border-color: #e5e7eb; color: #4b5563; }"
+    },
+    {
+      "name": "Raised Card",
+      "kind": "card",
+      "refersTo": "panel",
+      "description": "Tactile shadcn Card surface for filters, results, and summaries.",
+      "html": "<section class=\"ds-card\"><h2>Summary</h2><p>Visible rows and status counts.</p></section>",
+      "css": ".ds-card { background: #ffffff; border: 1px solid #e5e7eb; border-radius: 10px; box-shadow: 0 1px 2px rgba(17, 24, 39, 0.06), 0 8px 24px rgba(17, 24, 39, 0.06); color: #171717; padding: 16px; } .ds-card h2 { color: #171717; font: 650 1.125rem/1.25 Inter, ui-sans-serif, system-ui, sans-serif; margin: 0 0 10px; } .ds-card p { color: #6b7280; font: 400 0.875rem/1.45 Inter, ui-sans-serif, system-ui, sans-serif; margin: 0; }"
+    },
+    {
+      "name": "Result Card",
+      "kind": "card",
+      "refersTo": "panel",
+      "description": "Mobile Card plus Badge equivalent of one result table row.",
+      "html": "<article class=\"ds-result-card\"><span class=\"ds-status ds-status-possible\">Possible</span><h3>Indian Institute of Technology Delhi</h3><p>Computer Science and Engineering</p></article>",
+      "css": ".ds-result-card { background: #ffffff; border: 1px solid #e5e7eb; border-radius: 10px; box-shadow: 0 1px 2px rgba(17, 24, 39, 0.06), 0 8px 24px rgba(17, 24, 39, 0.06); color: #171717; padding: 14px; } .ds-result-card h3 { color: #171717; font: 600 0.95rem/1.3 Inter, ui-sans-serif, system-ui, sans-serif; margin: 10px 0 5px; } .ds-result-card p { color: #6b7280; font: 400 0.875rem/1.45 Inter, ui-sans-serif, system-ui, sans-serif; margin: 0; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Allocation Console",
+    "overview": "This system should feel as composed and fast as Linear: precise, quiet, tactile, and beautiful because every surface helps the user move faster. JoSAA Rank Analysis is still a counselling tool, but the visual target is a modern product console rather than a school-admissions site. It should make the student feel that the data is under control.",
+    "keyCharacteristics": [
+      "Graphite-led neutral palette with no purple.",
+      "Dense, fast, Linear-like product ergonomics.",
+      "Tactile raised surfaces with clean borders and calibrated shadows.",
+      "shadcn-style primitives, not custom-looking form controls.",
+      "Semantic status colors used sparingly and always paired with text.",
+      "Mobile cards and desktop tables stay semantically equivalent."
+    ],
+    "rules": [
+      {
+        "name": "The No Purple Rule",
+        "body": "Purple is prohibited in the future visual system. If a token or component still uses violet, it is legacy debt to remove during implementation.",
+        "section": "colors"
+      },
+      {
+        "name": "The Semantic Restraint Rule",
+        "body": "Green, rose, amber, and blue appear only when they carry meaning: result status, focus, warning, or error.",
+        "section": "colors"
+      },
+      {
+        "name": "The Linear Density Rule",
+        "body": "Use small, clear type with strong spacing discipline. Large display type is a liability in this product.",
+        "section": "typography"
+      },
+      {
+        "name": "The Tactile Stack Rule",
+        "body": "Resting controls get a hairline lift, panels get a soft two-layer lift, and sheets get the only strong shadow.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do target Linear-level product polish: fast, quiet, tactile, and beautiful.",
+      "Do migrate implementation toward shadcn/ui primitives even though the MVP spec said no component library.",
+      "Do remove purple from future tokens and component states.",
+      "Do use graphite neutrals, white raised surfaces, and sparse semantic color.",
+      "Do use exact years, rounds, opening ranks, closing ranks, and no-cutoff labels.",
+      "Do pair every possible, not possible, and no cutoff color with text.",
+      "Do make controls feel tactile through calibrated border, shadow, hover, and focus states.",
+      "Do keep mobile result cards equivalent to the desktop table."
+    ],
+    "donts": [
+      "Don't preserve the current purple palette as brand identity.",
+      "Don't use marketing-site treatment, decorative academic imagery, or vague admissions-coaching language.",
+      "Don't imply prediction certainty. This is historical cutoff analysis, not an admissions guarantee.",
+      "Don't clone the official JoSAA portal or style the app like a coaching-center lead form.",
+      "Don't make a generic analytics dashboard detached from the student's rank decision.",
+      "Don't rely on color alone for status meaning.",
+      "Don't use warm cream, beige, sand, violet, glassmorphism, gradient text, or oversized landing-page hero sections.",
+      "Don't let tactile elevation become decorative bulk. If a shadow does not clarify hierarchy, remove it."
+    ]
+  }
+}

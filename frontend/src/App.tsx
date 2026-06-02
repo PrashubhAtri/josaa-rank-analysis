@@ -1,4 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
+import { Badge } from "./components/ui/badge";
+import { Button } from "./components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "./components/ui/card";
+import { Input, Select } from "./components/ui/input";
+import { Sheet } from "./components/ui/sheet";
+import { Skeleton } from "./components/ui/skeleton";
 
 const ALL = "ALL";
 const optionalFilterOrder = [
@@ -17,6 +23,7 @@ type Status = "possible" | "not-possible" | "no-data";
 type ResultStatus = Status | typeof ALL;
 type RankValue = string | number | null | undefined;
 type SearchIndex = Record<string, Record<string, string>>;
+type ThemeMode = "light" | "dark";
 
 type Filters = {
   year: string;
@@ -90,6 +97,7 @@ type CutoffPayload = CutoffRow[] | {
 type MultiSelectFilterProps = {
   disabled?: boolean;
   label: string;
+  placeholder?: string;
   options: string[];
   searchIndex: SearchIndex;
   searchValue: string;
@@ -154,6 +162,13 @@ const TOP_7_IITS = [
   "Indian Institute of Technology Roorkee",
   "Indian Institute of Technology Guwahati",
 ];
+const RESULT_RENDER_LIMIT = 500;
+
+function initialTheme(): ThemeMode {
+  const stored = window.localStorage.getItem("theme");
+  if (stored === "light" || stored === "dark") return stored;
+  return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
 
 function sortText(values: Iterable<RankValue>) {
   return [...values].map(String).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
@@ -494,6 +509,37 @@ function csvEscape(value: unknown) {
   return text;
 }
 
+function CheckIcon() {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+      <path d="M13.3 4.2 6.4 11 3.2 7.8" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
+    </svg>
+  );
+}
+
+function ThemeIcon({ theme }: { theme: ThemeMode }) {
+  if (theme === "dark") {
+    return (
+      <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+        <path d="M10 2.5v2M10 15.5v2M4.7 4.7l1.4 1.4M13.9 13.9l1.4 1.4M2.5 10h2M15.5 10h2M4.7 15.3l1.4-1.4M13.9 6.1l1.4-1.4" fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="1.6" />
+        <circle cx="10" cy="10" r="3.2" fill="none" stroke="currentColor" strokeWidth="1.6" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+      <path d="M15.7 12.4A6.2 6.2 0 0 1 7.6 4.3 6.8 6.8 0 1 0 15.7 12.4Z" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.7" />
+    </svg>
+  );
+}
+
+function multiValueLabel(selectedList: string[], placeholder: string) {
+  if (!selectedList.length) return placeholder;
+  if (selectedList.length === 1) return selectedList[0];
+  return `${selectedList.length} selected`;
+}
+
 function downloadCsv(rows: GroupedRow[]) {
   const columns = [
     "status",
@@ -522,6 +568,7 @@ function downloadCsv(rows: GroupedRow[]) {
 function MultiSelectFilter({
   disabled = false,
   label,
+  placeholder = "Any",
   options,
   searchIndex,
   searchValue,
@@ -553,65 +600,80 @@ function MultiSelectFilter({
   }
 
   return (
-    <details className={`multi-filter${disabled ? " is-disabled" : ""}`}>
-      <summary>{label}</summary>
-      <div className="multi-menu">
-        <input
-          className="multi-search"
-          value={searchValue}
-          placeholder={`Search ${label.toLowerCase()}`}
-          onChange={(event) => onSearchChange(event.target.value)}
-          disabled={disabled}
-        />
-        {specialPresets.length ? (
-          <div className="preset-block">
-            <span>Quick picks</span>
-            <div className="preset-actions">
-              {specialPresets.map((preset) => (
-                <button
-                  key={preset.label}
-                  type="button"
-                  className="preset-button"
-                  onClick={() => onChange(preset.values)}
-                  disabled={disabled}
-                >
-                  {preset.label}
-                </button>
-              ))}
+    <div className={`filter-field multi-filter-field${disabled ? " is-disabled" : ""}`}>
+      <span className="filter-label">{label}</span>
+      <details className="multi-filter">
+        <summary>
+          <span className={`filter-control-value${selectedList.length ? "" : " is-placeholder"}`}>
+            {multiValueLabel(selectedList, placeholder)}
+          </span>
+          {selectedList.length ? <span className="filter-count">{selectedList.length}</span> : null}
+        </summary>
+        <div className="multi-menu">
+          <Input
+            className="multi-search"
+            value={searchValue}
+            placeholder={`Search ${label.toLowerCase()}`}
+            onChange={(event) => onSearchChange(event.target.value)}
+            disabled={disabled}
+          />
+          {specialPresets.length ? (
+            <div className="preset-block">
+              <span>Quick picks</span>
+              <div className="preset-actions">
+                {specialPresets.map((preset) => (
+                  <Button
+                    key={preset.label}
+                    type="button"
+                    variant="chip"
+                    className="preset-button"
+                    onClick={() => onChange(preset.values)}
+                    disabled={disabled}
+                  >
+                    {preset.label}
+                  </Button>
+                ))}
+              </div>
             </div>
-          </div>
-        ) : null}
-        <div className="multi-actions">
-          <button type="button" className="mini-button" onClick={selectVisible} disabled={disabled || !visibleOptions.length}>
-            Select shown
-          </button>
-          <button type="button" className="mini-button secondary-mini" onClick={() => onChange([])} disabled={disabled || !selectedList.length}>
-            Clear
-          </button>
-        </div>
-        <div className="option-list">
-          {renderedOptions.map((value) => (
-            <label key={value} className="check-option">
-              <input
-                type="checkbox"
-                checked={selectedList.includes(value)}
-                onChange={() => toggleValue(value)}
-                disabled={disabled}
-              />
-              <span>{value}</span>
-            </label>
-          ))}
-          {visibleOptions.length > renderedOptions.length ? (
-            <p className="option-limit">Showing first {renderedOptions.length} of {visibleOptions.length}. Keep typing to narrow.</p>
           ) : null}
-          {!visibleOptions.length ? <p className="option-limit">No matching options.</p> : null}
+          <div className="multi-actions">
+            <Button type="button" variant="mini" className="mini-button" onClick={selectVisible} disabled={disabled || !visibleOptions.length}>
+              Select shown
+            </Button>
+            <Button type="button" variant="mini" className="mini-button secondary-mini" onClick={() => onChange([])} disabled={disabled || !selectedList.length}>
+              Clear
+            </Button>
+          </div>
+          <div className="option-list">
+            {renderedOptions.map((value) => {
+              const isSelected = selectedList.includes(value);
+              return (
+                <label key={value} className={`check-option${isSelected ? " is-selected" : ""}`}>
+                  <input
+                    className="check-option-input"
+                    type="checkbox"
+                    checked={isSelected}
+                    onChange={() => toggleValue(value)}
+                    disabled={disabled}
+                  />
+                  <span className="check-indicator">{isSelected ? <CheckIcon /> : null}</span>
+                  <span className="check-text">{value}</span>
+                </label>
+              );
+            })}
+            {visibleOptions.length > renderedOptions.length ? (
+              <p className="option-limit">Showing first {renderedOptions.length} of {visibleOptions.length}. Keep typing to narrow.</p>
+            ) : null}
+            {!visibleOptions.length ? <p className="option-limit">No matching options.</p> : null}
+          </div>
         </div>
-      </div>
-    </details>
+      </details>
+    </div>
   );
 }
 
 function App() {
+  const [theme, setTheme] = useState<ThemeMode>(initialTheme);
   const [yearRows, setYearRows] = useState<Record<string, CutoffRow[]>>({});
   const [availableYears, setAvailableYears] = useState<ManifestEntry[]>([]);
   const [searchIndex, setSearchIndex] = useState<SearchIndex>({});
@@ -626,6 +688,18 @@ function App() {
   const [filterSearches, setFilterSearches] = useState(emptyFilterSearches);
   const [resultFilterSearches, setResultFilterSearches] = useState(emptyFilterSearches);
   const [error, setError] = useState("");
+  const [toast, setToast] = useState("");
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    window.localStorage.setItem("theme", theme);
+  }, [theme]);
+
+  useEffect(() => {
+    if (!toast) return;
+    const timeout = window.setTimeout(() => setToast(""), 2400);
+    return () => window.clearTimeout(timeout);
+  }, [toast]);
 
   useEffect(() => {
     Promise.all([
@@ -654,11 +728,21 @@ function App() {
       setYearLoadState("idle");
       return;
     }
+    if (loadState !== "ready") {
+      setYearLoadState("idle");
+      return;
+    }
 
     const yearsToLoad = [...new Set([filters.year, ...selectedValues(filters.compare_years)].filter(Boolean).map(String))];
     const missingYears = yearsToLoad.filter((year) => !yearRows[year]);
     if (!missingYears.length) {
       setYearLoadState("ready");
+      return;
+    }
+    const missingEntries = missingYears.filter((year) => !availableYears.some((entry) => String(entry.year) === String(year)));
+    if (missingEntries.length) {
+      setError(`No data file listed for ${missingEntries.join(", ")}`);
+      setYearLoadState("error");
       return;
     }
 
@@ -690,7 +774,7 @@ function App() {
       });
 
     return () => controller.abort();
-  }, [filters.year, filters.compare_years, availableYears, yearRows]);
+  }, [filters.year, filters.compare_years, availableYears, yearRows, loadState]);
 
   const yearOptions = useMemo(() => sortText(new Set(availableYears.map((entry) => entry.year))).reverse(), [availableYears]);
   const rows = useMemo(() => yearRows[String(filters.year)] || [], [yearRows, filters.year]);
@@ -751,6 +835,8 @@ function App() {
     }
     return options;
   }, [groupedResults]);
+  const displayedResults = useMemo(() => visibleResults.slice(0, RESULT_RENDER_LIMIT), [visibleResults]);
+  const hiddenResultCount = Math.max(visibleResults.length - displayedResults.length, 0);
 
   function updateFilter(key: keyof Filters, value: string | string[]) {
     if (key === "rank" && String(value) !== "" && !/^\d+$/.test(String(value))) {
@@ -795,7 +881,8 @@ function App() {
   function copyShareUrl() {
     const url = updateShareUrl();
     navigator.clipboard?.writeText(url);
-    setError("Share link copied to this page URL.");
+    setError("");
+    setToast("Share link copied");
   }
 
   function applyPreset(fieldKey: OptionalFilterKey, values: string[]) {
@@ -839,7 +926,7 @@ function App() {
       {(yearLoadState === "loading" || isAnalyzing) ? (
         <div className="loading-overlay" role="status" aria-live="polite">
           <div className="loader-card">
-            <span className="spinner" aria-hidden="true" />
+            <Skeleton className="loader-skeleton" aria-hidden="true" />
             <div>
               <strong>{isAnalyzing ? "Analyzing rank" : `Loading ${filters.year} data`}</strong>
               <p>{isAnalyzing ? "Preparing grouped college and course results..." : "Fetching cutoff data for the selected year..."}</p>
@@ -849,38 +936,56 @@ function App() {
       ) : null}
       <header className="page-header">
         <div>
-          <p className="eyebrow">Static JoSAA cutoff analysis</p>
+          <div className="header-kicker">
+            <span>2021 to 2025</span>
+          </div>
           <h1>JoSAA Rank Analysis</h1>
+          <p className="header-copy">Fast rank analysis for IIT, NIT, IIIT, and GFTI counselling options.</p>
         </div>
-        <div className="data-pill">{dataStatusLabel()}</div>
+        <div className="header-actions">
+          <Badge>{dataStatusLabel()}</Badge>
+          <Button
+            type="button"
+            variant="secondary"
+            className="icon-button theme-toggle"
+            aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+            aria-pressed={theme === "dark"}
+            title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+            onClick={() => setTheme((current) => (current === "dark" ? "light" : "dark"))}
+          >
+            <ThemeIcon theme={theme} />
+          </Button>
+        </div>
       </header>
 
-      <form className="filter-panel" onSubmit={submitAnalysis}>
+      <Card className="filter-panel">
+      <form onSubmit={submitAnalysis}>
         <div className="quick-strip">
           {topInstitutePresets.map((preset) => (
-            <button key={preset.label} type="button" className="quick-chip" onClick={() => applyPreset("institute", preset.values)}>
+            <Button key={preset.label} type="button" variant="chip" className="quick-chip" onClick={() => applyPreset("institute", preset.values)}>
               {preset.label}
-            </button>
+            </Button>
           ))}
           {topFieldPreset ? (
-            <button type="button" className="quick-chip" onClick={() => applyPreset("academic_program", topFieldPreset.values)}>
+            <Button type="button" variant="chip" className="quick-chip" onClick={() => applyPreset("academic_program", topFieldPreset.values)}>
               Top fields
-            </button>
+            </Button>
           ) : null}
         </div>
         <div className="filter-grid">
-          <label>
-            <span>{labels.year}</span>
-            <select value={filters.year} onChange={(event) => updateFilter("year", event.target.value)} required>
+          <label className="filter-field">
+            <span className="filter-label">{labels.year}</span>
+            <Select value={filters.year} onChange={(event) => updateFilter("year", event.target.value)} required>
               <option value="">Select year</option>
               {yearOptions.map((year) => (
                 <option key={year} value={year}>{year}</option>
               ))}
-            </select>
+            </Select>
           </label>
           <MultiSelectFilter
             fieldKey="compare_years"
             label={labels.compare_years}
+            placeholder="None"
             options={yearOptions.filter((year) => String(year) !== String(filters.year))}
             searchIndex={searchIndex}
             searchValue={filterSearches.compare_years || ""}
@@ -888,18 +993,18 @@ function App() {
             onChange={(values) => updateFilter("compare_years", values)}
             onSearchChange={(value) => setFilterSearches((current) => ({ ...current, compare_years: value }))}
           />
-          <label>
-            <span>{labels.round_no}</span>
-            <select value={filters.round_no} onChange={(event) => updateFilter("round_no", event.target.value)}>
+          <label className="filter-field">
+            <span className="filter-label">{labels.round_no}</span>
+            <Select value={filters.round_no} onChange={(event) => updateFilter("round_no", event.target.value)}>
               <option value="">All rounds</option>
               {roundOptions.map((round) => (
                 <option key={round} value={round}>Round {round}</option>
               ))}
-            </select>
+            </Select>
           </label>
-          <label>
-            <span>{labels.rank}</span>
-            <input
+          <label className="filter-field">
+            <span className="filter-label">{labels.rank}</span>
+            <Input
               value={filters.rank}
               min="1"
               step="1"
@@ -914,12 +1019,12 @@ function App() {
               required
             />
           </label>
-          <label>
-            <span>{labels.rankBasis}</span>
-            <select value={filters.rankBasis} onChange={(event) => updateFilter("rankBasis", event.target.value as RankBasis)} required>
+          <label className="filter-field">
+            <span className="filter-label">{labels.rankBasis}</span>
+            <Select value={filters.rankBasis} onChange={(event) => updateFilter("rankBasis", event.target.value as RankBasis)} required>
               <option value="closing_rank">Closing rank</option>
               <option value="opening_rank">Opening rank</option>
-            </select>
+            </Select>
           </label>
           {optionalFilterOrder.map((key) => (
             <MultiSelectFilter
@@ -936,36 +1041,33 @@ function App() {
           ))}
         </div>
         <div className="filter-actions">
-          <button type="submit" disabled={Boolean(filters.year && yearLoadState !== "ready")}>Analyze rank</button>
-          <button type="button" className="secondary" onClick={copyShareUrl}>
+          <Button type="submit" disabled={Boolean(filters.year && yearLoadState !== "ready")}>Analyze rank</Button>
+          <Button type="button" variant="secondary" className="secondary" onClick={copyShareUrl}>
             Copy/share link
-          </button>
-          <button type="button" className="secondary" onClick={() => { setFilters(emptyFilters); setSubmitted(null); setResultFilters(emptyResultFilters); setFilterSearches(emptyFilterSearches); setResultFilterSearches(emptyFilterSearches); setError(""); }}>
+          </Button>
+          <Button type="button" variant="secondary" className="secondary" onClick={() => { setFilters(emptyFilters); setSubmitted(null); setResultFilters(emptyResultFilters); setFilterSearches(emptyFilterSearches); setResultFilterSearches(emptyFilterSearches); setError(""); }}>
             Reset
-          </button>
+          </Button>
           {error ? <p className="error-text">{error}</p> : null}
         </div>
       </form>
+      </Card>
 
       <section className="content-grid">
-        <div className="results-area">
+        <Card className="results-area">
           <div className="result-toolbar">
             <label>
               <span>Search results</span>
-              <input value={resultFilters.search} placeholder="Institute, program, quota..." onChange={(event) => setResultFilters((current) => ({ ...current, search: event.target.value }))} />
+              <Input value={resultFilters.search} placeholder="Institute, program, quota..." onChange={(event) => setResultFilters((current) => ({ ...current, search: event.target.value }))} />
             </label>
             <label>
               <span>{labels.status}</span>
-              <select value={resultFilters.status} onChange={(event) => setResultFilters((current) => ({ ...current, status: event.target.value as ResultStatus }))}>
+              <Select value={resultFilters.status} onChange={(event) => setResultFilters((current) => ({ ...current, status: event.target.value as ResultStatus }))}>
                 <option value={ALL}>All statuses</option>
                 <option value="possible">Possible</option>
                 <option value="not-possible">Not possible</option>
                 <option value="no-data">No cutoff</option>
-              </select>
-            </label>
-            <label className="toggle-line">
-              <input type="checkbox" checked={bestOnly} onChange={(event) => setBestOnly(event.target.checked)} />
-              <span>Best possible only</span>
+              </Select>
             </label>
             {optionalFilterOrder.map((key) => (
               <MultiSelectFilter
@@ -981,19 +1083,25 @@ function App() {
                 onSearchChange={(value) => setResultFilterSearches((current) => ({ ...current, [key]: value }))}
               />
             ))}
-            <button type="button" className="secondary" onClick={() => downloadCsv(visibleResults)} disabled={!visibleResults.length}>
-              Export CSV
-            </button>
+            <div className="result-filter-footer">
+              <label className="standalone-checkbox">
+                <input type="checkbox" checked={bestOnly} onChange={(event) => setBestOnly(event.target.checked)} />
+                <span>Best possible only</span>
+              </label>
+              <Button type="button" variant="secondary" className="secondary" onClick={() => downloadCsv(visibleResults)} disabled={!visibleResults.length}>
+                Export CSV
+              </Button>
+            </div>
           </div>
 
           <div className="mobile-results">
             {!submitted ? (
-              <div className="empty-card">Enter a year and rank, then submit to analyze results.</div>
-            ) : visibleResults.length ? (
-              visibleResults.map((row, index) => (
+              <Card className="empty-card">Enter a year and rank, then submit to analyze results.</Card>
+            ) : displayedResults.length ? (
+              displayedResults.map((row, index) => (
                 <article key={`mobile-${row.year}-${row.institute}-${row.academic_program}-${row.quota}-${row.seat_type}-${row.gender_pool}-${index}`} className={`result-card row-${row.status}`}>
                   <div className="card-topline">
-                    <span className={`status-dot status-${row.status}`}>{statusLabel(row.status)}</span>
+                    <Badge variant={row.status}>{statusLabel(row.status)}</Badge>
                     <span>{row.quota} / {row.seat_type} / {row.rank_type}</span>
                   </div>
                   <h3>{row.institute}</h3>
@@ -1011,11 +1119,11 @@ function App() {
                     <div><dt>Best opening</dt><dd>{formatRank(row.opening_rank)}</dd></div>
                     <div><dt>Best closing</dt><dd>{formatRank(row.closing_rank)}</dd></div>
                   </dl>
-                  <button type="button" className="card-detail-button" onClick={() => setSelectedDetail(row)}>Open details</button>
+                  <Button type="button" className="card-detail-button" onClick={() => setSelectedDetail(row)}>Open details</Button>
                 </article>
               ))
             ) : (
-              <div className="empty-card">No rows match the current result filters.</div>
+              <Card className="empty-card">No rows match the current result filters.</Card>
             )}
           </div>
 
@@ -1039,11 +1147,11 @@ function App() {
               </thead>
               <tbody>
                 {!submitted ? (
-                  <tr><td colSpan={12} className="empty-cell">Enter a year and rank, then submit to analyze results.</td></tr>
-                ) : visibleResults.length ? (
-                  visibleResults.map((row, index) => (
+                  <tr><td colSpan={12} className="empty-cell">Enter a year and rank to analyze results.</td></tr>
+                ) : displayedResults.length ? (
+                  displayedResults.map((row, index) => (
                     <tr key={`${row.year}-${row.institute}-${row.academic_program}-${row.quota}-${row.seat_type}-${row.gender_pool}-${index}`} className={`row-${row.status}`}>
-                      <td><span className={`status-dot status-${row.status}`}>{statusLabel(row.status)}</span></td>
+                      <td><Badge variant={row.status}>{statusLabel(row.status)}</Badge></td>
                       <td>
                         <div className="round-stack">
                           {row.rounds.map((round) => (
@@ -1062,7 +1170,7 @@ function App() {
                       <td><span className={`buffer-pill buffer-${normalizeSearch(row.buffer_label)}`}>{row.buffer_label} {formatBuffer(row.buffer)}</span></td>
                       <td>{formatRank(row.opening_rank)}</td>
                       <td>{formatRank(row.closing_rank)}</td>
-                      <td><button type="button" className="mini-button secondary-mini" onClick={() => setSelectedDetail(row)}>Open</button></td>
+                      <td><Button type="button" variant="mini" className="mini-button secondary-mini" onClick={() => setSelectedDetail(row)}>Open</Button></td>
                     </tr>
                   ))
                 ) : (
@@ -1071,10 +1179,18 @@ function App() {
               </tbody>
             </table>
           </div>
-        </div>
+          {hiddenResultCount ? (
+            <p className="result-limit-note">
+              Showing first {displayedResults.length.toLocaleString()} of {visibleResults.length.toLocaleString()} matching rows. Use result filters or search to narrow before reviewing every row.
+            </p>
+          ) : null}
+        </Card>
 
-        <aside className="summary-panel">
-          <h2>Summary</h2>
+        <Card className="summary-panel">
+          <CardHeader>
+            <CardTitle>Summary</CardTitle>
+          </CardHeader>
+          <CardContent>
           <dl>
             <div><dt>Visible rows</dt><dd>{summary.total.toLocaleString()}</dd></div>
             <div><dt>Possible</dt><dd>{summary.possible.toLocaleString()}</dd></div>
@@ -1089,20 +1205,14 @@ function App() {
           ) : (
             <p>Submit a rank analysis to populate possible, not possible, and missing cutoff groups.</p>
           )}
-        </aside>
+          </CardContent>
+        </Card>
       </section>
 
-      <div className="mobile-action-bar">
-        <button type="button" onClick={() => document.querySelector(".filter-panel")?.scrollIntoView({ behavior: "smooth" })}>Filters</button>
-        <button type="button" onClick={submitAnalysis} disabled={!filters.year || yearLoadState !== "ready"}>Analyze</button>
-        <span>{visibleResults.length.toLocaleString()} results</span>
-      </div>
-
       {selectedDetail ? (
-        <div className="detail-backdrop" role="dialog" aria-modal="true">
-          <aside className="detail-drawer">
-            <button type="button" className="detail-close" onClick={() => setSelectedDetail(null)}>Close</button>
-            <span className={`status-dot status-${selectedDetail.status}`}>{statusLabel(selectedDetail.status)}</span>
+        <Sheet>
+            <Button type="button" variant="secondary" className="detail-close" onClick={() => setSelectedDetail(null)}>Close</Button>
+            <Badge variant={selectedDetail.status}>{statusLabel(selectedDetail.status)}</Badge>
             <h2>{selectedDetail.institute}</h2>
             <p>{selectedDetail.academic_program}</p>
             <dl className="detail-meta">
@@ -1122,9 +1232,9 @@ function App() {
                 </div>
               ))}
             </div>
-          </aside>
-        </div>
+        </Sheet>
       ) : null}
+      {toast ? <div className="toast" role="status">{toast}</div> : null}
     </main>
   );
 }
