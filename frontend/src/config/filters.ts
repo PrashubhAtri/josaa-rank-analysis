@@ -1,4 +1,4 @@
-import type { FilterSearches, Filters, ResultFilters } from "../types";
+import type { FilterSearches, Filters, MultiFilterKey, OptionalFilterKey, ResultFilters } from "../types";
 
 export const ALL = "ALL";
 
@@ -66,3 +66,36 @@ export const TOP_7_IITS = [
 ];
 
 export const RESULT_RENDER_LIMIT = 500;
+
+const filterValueFullForms: Partial<Record<OptionalFilterKey, Record<string, string>>> = {
+  quota: {
+    AI: "All India",
+    GO: "Goa",
+    HS: "Home State",
+    JK: "Jammu and Kashmir",
+    LA: "Ladakh",
+    OS: "Other State",
+  },
+  seat_type: {
+    EWS: "Economically Weaker Sections",
+    "EWS (PwD)": "Economically Weaker Sections - Persons with Disabilities",
+    "OBC-NCL": "Other Backward Classes - Non-Creamy Layer",
+    "OBC-NCL (PwD)": "Other Backward Classes - Non-Creamy Layer, Persons with Disabilities",
+    OPEN: "Open",
+    "OPEN (PwD)": "Open - Persons with Disabilities",
+    SC: "Scheduled Caste",
+    "SC (PwD)": "Scheduled Caste - Persons with Disabilities",
+    ST: "Scheduled Tribe",
+    "ST (PwD)": "Scheduled Tribe - Persons with Disabilities",
+  },
+  rank_type: {
+    CATEGORY_RANK: "Category Rank",
+    CRL: "Common Rank List",
+    PWD_CATEGORY_RANK: "PwD Category Rank",
+  },
+};
+
+export function filterOptionLabel(fieldKey: MultiFilterKey, value: string) {
+  const fullForm = filterValueFullForms[fieldKey as OptionalFilterKey]?.[value];
+  return fullForm ? `${value} - ${fullForm}` : value;
+}

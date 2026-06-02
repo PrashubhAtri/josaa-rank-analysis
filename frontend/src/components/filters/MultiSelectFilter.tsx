@@ -1,6 +1,7 @@
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { CheckIcon } from "../icons";
+import { filterOptionLabel } from "../../config/filters";
 import type { MultiFilterKey, SearchIndex } from "../../types";
 import {
   optionMatchesSearch,
@@ -23,9 +24,9 @@ type MultiSelectFilterProps = {
   onSearchChange: (value: string) => void;
 };
 
-function multiValueLabel(selectedList: string[], placeholder: string) {
+function multiValueLabel(fieldKey: MultiFilterKey, selectedList: string[], placeholder: string) {
   if (!selectedList.length) return placeholder;
-  if (selectedList.length === 1) return selectedList[0];
+  if (selectedList.length === 1) return filterOptionLabel(fieldKey, selectedList[0]);
   return `${selectedList.length} selected`;
 }
 
@@ -69,7 +70,7 @@ export function MultiSelectFilter({
       <details className="multi-filter">
         <summary className="multi-trigger">
           <span className={`filter-control-value${selectedList.length ? "" : " is-placeholder"}`}>
-            {multiValueLabel(selectedList, placeholder)}
+            {multiValueLabel(fieldKey, selectedList, placeholder)}
           </span>
           {selectedList.length ? <span className="filter-count">{selectedList.length}</span> : null}
         </summary>
@@ -121,7 +122,7 @@ export function MultiSelectFilter({
                     disabled={disabled}
                   />
                   <span className="check-indicator">{isSelected ? <CheckIcon /> : null}</span>
-                  <span className="check-text">{value}</span>
+                  <span className="check-text">{filterOptionLabel(fieldKey, value)}</span>
                 </label>
               );
             })}

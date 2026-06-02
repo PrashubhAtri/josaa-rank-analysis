@@ -1,4 +1,4 @@
-import { ALL, optionalFilterOrder, TOP_7_IITS } from "../config/filters";
+import { ALL, filterOptionLabel, optionalFilterOrder, TOP_7_IITS } from "../config/filters";
 import type { GroupedRow, MultiFilterKey, RankValue, SearchIndex } from "../types";
 
 export function normalizeSearch(value: RankValue) {
@@ -19,7 +19,7 @@ export function selectedValues(value: string[] | string | number | null | undefi
 }
 
 function optionSearchText(searchIndex: SearchIndex, key: string, value: RankValue) {
-  return normalizeSearch(`${value} ${searchIndex[key]?.[String(value)] || ""}`);
+  return normalizeSearch(`${filterOptionLabel(key as MultiFilterKey, String(value))} ${searchIndex[key]?.[String(value)] || ""}`);
 }
 
 export function optionMatchesSearch(searchIndex: SearchIndex, key: string, value: string, query: string) {
