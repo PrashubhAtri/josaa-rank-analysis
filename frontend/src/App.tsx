@@ -218,6 +218,35 @@ function App() {
   }, [groupedResults]);
   const displayedResults = useMemo(() => visibleResults.slice(0, RESULT_RENDER_LIMIT), [visibleResults]);
   const hiddenResultCount = Math.max(visibleResults.length - displayedResults.length, 0);
+  const hasSelectedYear = Boolean(filters.year);
+  const yearDataPending = hasSelectedYear && yearLoadState !== "ready";
+  const chooseYearMessage = "Choose year first";
+  const yearLoadingMessage = "Loading year data";
+
+  function dependentFilterDisabledReason(key: OptionalFilterKey) {
+    if (!hasSelectedYear) return "Choose year first";
+    if (yearDataPending) return yearLoadingMessage;
+    const keyIndex = optionalFilterOrder.indexOf(key);
+    const missingParent = optionalFilterOrder.slice(0, keyIndex).find((parentKey) => !selectedValues(filters[parentKey]).length);
+    return missingParent ? `Choose ${labels[missingParent].toLowerCase()} first` : "";
+  }
+
+  function pruneOptionalSelections(next: Filters, sourceRows: CutoffRow[]) {
+    for (const optionalKey of optionalFilterOrder) {
+      const keyIndex = optionalFilterOrder.indexOf(optionalKey);
+      const missingParent = optionalFilterOrder.slice(0, keyIndex).some((parentKey) => !selectedValues(next[parentKey]).length);
+      if (missingParent) {
+        next[optionalKey] = [];
+        continue;
+      }
+
+      const selected = selectedValues(next[optionalKey]);
+      if (!selected.length) continue;
+
+      const available = new Set(uniqueOptions(applyFilterChain(sourceRows, next, optionalKey), optionalKey));
+      next[optionalKey] = selected.filter((value) => available.has(value));
+    }
+  }
 
   function updateFilter(key: keyof Filters, value: string | string[]) {
     if (key === "rank" && String(value) !== "" && !/^\d+$/.test(String(value))) {
@@ -231,15 +260,16 @@ function App() {
       } else {
         Object.assign(next, { [key]: value });
       }
-      const startIndex = optionalFilterOrder.indexOf(key as OptionalFilterKey);
-      if (key === "year" || key === "round_no") {
-        for (const optionalKey of optionalFilterOrder) next[optionalKey] = [];
-      } else if (startIndex >= 0) {
-        for (const optionalKey of optionalFilterOrder.slice(startIndex + 1)) next[optionalKey] = [];
-      }
       if (key === "year") {
         next.round_no = "";
         next.compare_years = selectedValues(next.compare_years).filter((year) => String(year) !== String(value));
+      }
+      if (!next.year) {
+        next.compare_years = [];
+        next.round_no = "";
+        for (const optionalKey of optionalFilterOrder) next[optionalKey] = [];
+      } else if (key !== "year") {
+        pruneOptionalSelections(next, rows);
       }
       return next;
     });
@@ -360,10 +390,12 @@ function App() {
               variant="chip"
               className={`quick-chip${presetIsSelected(filters.institute, preset.values) ? " is-active" : ""}`}
               onClick={() => applyPreset("institute", preset.values)}
+              disabled={!hasSelectedYear || yearDataPending}
             >
               {preset.label}
             </Button>
           ))}
+          {!hasSelectedYear ? <span className="quick-strip-note">{chooseYearMessage} to unlock filters.</span> : null}
         </div>
         <div className="filter-grid">
           <label className="filter-field">
@@ -383,19 +415,22 @@ function App() {
             searchIndex={searchIndex}
             searchValue={filterSearches.compare_years || ""}
             selected={filters.compare_years}
+            disabled={!hasSelectedYear}
+            disabledReason={chooseYearMessage}
             onChange={(values) => updateFilter("compare_years", values)}
             onSearchChange={(value) => setFilterSearches((current) => ({ ...current, compare_years: value }))}
           />
-          <label className="filter-field">
+          <label className={`filter-field${!hasSelectedYear || yearDataPending ? " is-disabled" : ""}`}>
             <span className="filter-label">{labels.round_no}</span>
-            <Select value={filters.round_no} onChange={(event) => updateFilter("round_no", event.target.value)}>
+            <Select value={filters.round_no} onChange={(event) => updateFilter("round_no", event.target.value)} disabled={!hasSelectedYear || yearDataPending}>
               <option value="">All rounds</option>
               {roundOptions.map((round) => (
                 <option key={round} value={round}>Round {round}</option>
               ))}
             </Select>
+            {!hasSelectedYear || yearDataPending ? <span className="filter-help">{!hasSelectedYear ? chooseYearMessage : yearLoadingMessage}</span> : null}
           </label>
-          <label className="filter-field">
+          <label className={`filter-field${!hasSelectedYear ? " is-disabled" : ""}`}>
             <span className="filter-label">{labels.rank}</span>
             <Input
               value={filters.rank}
@@ -404,6 +439,7 @@ function App() {
               type="number"
               inputMode="numeric"
               onChange={(event) => updateFilter("rank", event.target.value)}
+              disabled={!hasSelectedYear}
               onKeyDown={(event) => {
                 if ([".", "-", "+", "e", "E"].includes(event.key)) {
                   event.preventDefault();
@@ -411,27 +447,34 @@ function App() {
               }}
               required
             />
+            {!hasSelectedYear ? <span className="filter-help">{chooseYearMessage}</span> : null}
           </label>
-          <label className="filter-field">
+          <label className={`filter-field${!hasSelectedYear ? " is-disabled" : ""}`}>
             <span className="filter-label">{labels.rankBasis}</span>
-            <Select value={filters.rankBasis} onChange={(event) => updateFilter("rankBasis", event.target.value as RankBasis)} required>
+            <Select value={filters.rankBasis} onChange={(event) => updateFilter("rankBasis", event.target.value as RankBasis)} disabled={!hasSelectedYear} required>
               <option value="closing_rank">Closing rank</option>
               <option value="opening_rank">Opening rank</option>
             </Select>
+            {!hasSelectedYear ? <span className="filter-help">{chooseYearMessage}</span> : null}
           </label>
-          {optionalFilterOrder.map((key) => (
-            <MultiSelectFilter
-              key={key}
-              fieldKey={key}
-              label={labels[key]}
-              options={filterOptions[key] || []}
-              searchIndex={searchIndex}
-              searchValue={filterSearches[key]}
-              selected={filters[key]}
-              onChange={(values) => updateFilter(key, values)}
-              onSearchChange={(value) => setFilterSearches((current) => ({ ...current, [key]: value }))}
-            />
-          ))}
+          {optionalFilterOrder.map((key) => {
+            const disabledReason = dependentFilterDisabledReason(key);
+            return (
+              <MultiSelectFilter
+                key={key}
+                fieldKey={key}
+                label={labels[key]}
+                options={filterOptions[key] || []}
+                searchIndex={searchIndex}
+                searchValue={filterSearches[key]}
+                selected={filters[key]}
+                disabled={Boolean(disabledReason)}
+                disabledReason={disabledReason}
+                onChange={(values) => updateFilter(key, values)}
+                onSearchChange={(value) => setFilterSearches((current) => ({ ...current, [key]: value }))}
+              />
+            );
+          })}
         </div>
         <div className="filter-actions">
           <Button type="submit" disabled={Boolean(filters.year && yearLoadState !== "ready")}>Analyze rank</Button>

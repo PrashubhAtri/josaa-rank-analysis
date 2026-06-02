@@ -266,6 +266,7 @@ h1 {
 
 .ui-button:disabled,
 .ui-input:disabled,
+.filter-field.is-disabled,
 .multi-filter-field.is-disabled {
   cursor: not-allowed;
   opacity: 0.56;
@@ -382,10 +383,23 @@ h1 {
 }
 
 .quick-strip {
+  align-items: center;
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   margin-bottom: 14px;
+}
+
+.quick-strip-note,
+.filter-help {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.quick-strip-note {
+  padding: 3px 0;
 }
 
 .filter-grid {

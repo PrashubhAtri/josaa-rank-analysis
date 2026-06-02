@@ -13,6 +13,7 @@ import {
 
 type MultiSelectFilterProps = {
   disabled?: boolean;
+  disabledReason?: string;
   label: string;
   placeholder?: string;
   options: string[];
@@ -32,6 +33,7 @@ function multiValueLabel(fieldKey: MultiFilterKey, selectedList: string[], place
 
 export function MultiSelectFilter({
   disabled = false,
+  disabledReason,
   label,
   placeholder = "Any",
   options,
@@ -67,10 +69,14 @@ export function MultiSelectFilter({
   return (
     <div className={`filter-field multi-filter-field${disabled ? " is-disabled" : ""}`}>
       <span className="filter-label">{label}</span>
-      <details className="multi-filter">
+      <details className="multi-filter" onToggle={(event) => {
+        if (disabled) {
+          event.currentTarget.open = false;
+        }
+      }}>
         <summary className="multi-trigger">
           <span className={`filter-control-value${selectedList.length ? "" : " is-placeholder"}`}>
-            {multiValueLabel(fieldKey, selectedList, placeholder)}
+            {disabled && disabledReason ? disabledReason : multiValueLabel(fieldKey, selectedList, placeholder)}
           </span>
           {selectedList.length ? <span className="filter-count">{selectedList.length}</span> : null}
         </summary>
@@ -133,6 +139,7 @@ export function MultiSelectFilter({
           </div>
         </div>
       </details>
+      {disabled && disabledReason ? <span className="filter-help">{disabledReason}</span> : null}
     </div>
   );
 }
