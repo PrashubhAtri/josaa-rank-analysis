@@ -7,22 +7,22 @@ const emptyFilters = {
   round_no: "",
   rank: "",
   rankBasis: "closing_rank",
-  institute: ALL,
-  academic_program: ALL,
-  quota: ALL,
-  seat_type: ALL,
-  gender_pool: ALL,
-  rank_type: ALL,
+  institute: [],
+  academic_program: [],
+  quota: [],
+  seat_type: [],
+  gender_pool: [],
+  rank_type: [],
 };
 
 const emptyResultFilters = {
   status: ALL,
-  institute: ALL,
-  academic_program: ALL,
-  quota: ALL,
-  seat_type: ALL,
-  gender_pool: ALL,
-  rank_type: ALL,
+  institute: [],
+  academic_program: [],
+  quota: [],
+  seat_type: [],
+  gender_pool: [],
+  rank_type: [],
   search: "",
 };
 
@@ -49,8 +49,47 @@ const labels = {
   status: "Status",
 };
 
+const emptyFilterSearches = Object.fromEntries(optionalFilterOrder.map((key) => [key, ""]));
+
 function sortText(values) {
   return [...values].sort((a, b) => String(a).localeCompare(String(b), undefined, { numeric: true }));
+}
+
+function normalizeSearch(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replaceAll("&", " and ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function searchTokens(value) {
+  return normalizeSearch(value).split(" ").filter(Boolean);
+}
+
+function selectedValues(value) {
+  return Array.isArray(value) ? value : value && value !== ALL ? [value] : [];
+}
+
+function optionSearchText(searchIndex, key, value) {
+  return normalizeSearch(`${value} ${searchIndex[key]?.[value] || ""}`);
+}
+
+function optionMatchesSearch(searchIndex, key, value, query) {
+  const tokens = searchTokens(query);
+  if (!tokens.length) return true;
+  const haystack = optionSearchText(searchIndex, key, value);
+  return tokens.every((token) => haystack.includes(token));
+}
+
+function rowMatchesSearch(searchIndex, row, query) {
+  const tokens = searchTokens(query);
+  if (!tokens.length) return true;
+  const haystack = optionalFilterOrder
+    .map((key) => optionSearchText(searchIndex, key, row[key]))
+    .join(" ");
+  return tokens.every((token) => haystack.includes(token));
 }
 
 function rankSortValue(value) {
@@ -69,8 +108,114 @@ function compareAnalyzedRows(a, b) {
   );
 }
 
+function roundStatusOrder(status) {
+  return { possible: 0, "not-possible": 1, "no-data": 2 }[status] ?? 3;
+}
+
+function groupKey(row) {
+  return [
+    row.institute,
+    row.academic_program,
+    row.quota,
+    row.seat_type,
+    row.gender_pool,
+    row.rank_type,
+  ].join("\u001f");
+}
+
+function formatRank(value) {
+  return value == null || !Number.isFinite(Number(value)) ? "-" : Number(value).toLocaleString();
+}
+
+function minRank(values) {
+  const numericValues = values.map(Number).filter(Number.isFinite);
+  return numericValues.length ? Math.min(...numericValues) : null;
+}
+
+function summarizeRounds(rounds) {
+  return rounds
+    .map((round) => `R${round.round_no}: ${formatRank(round.opening_rank)}-${formatRank(round.closing_rank)} (${statusLabel(round.status)})`)
+    .join("; ");
+}
+
+function groupAnalyzedRows(rows) {
+  const groups = new Map();
+
+  for (const row of rows) {
+    const key = groupKey(row);
+    if (!groups.has(key)) {
+      groups.set(key, {
+        ...row,
+        opening_rank: null,
+        closing_rank: null,
+        cutoff_rank: null,
+        status: "no-data",
+        rounds: [],
+        round_count: 0,
+        rounds_label: "",
+      });
+    }
+
+    const group = groups.get(key);
+    group.rounds.push({
+      round_no: row.round_no,
+      opening_rank: row.opening_rank,
+      closing_rank: row.closing_rank,
+      cutoff_rank: row.cutoff_rank,
+      status: row.status,
+    });
+  }
+
+  return [...groups.values()].map((group) => {
+    const rounds = group.rounds.sort((a, b) => Number(a.round_no) - Number(b.round_no));
+    const rankedRounds = rounds.filter((round) => round.cutoff_rank != null);
+    const possibleRounds = rounds.filter((round) => round.status === "possible");
+    const notPossibleRounds = rounds.filter((round) => round.status === "not-possible");
+    const status = possibleRounds.length ? "possible" : notPossibleRounds.length ? "not-possible" : "no-data";
+    const statusRounds = status === "possible" ? possibleRounds : status === "not-possible" ? notPossibleRounds : rounds;
+    const sortRound = statusRounds
+      .slice()
+      .sort(
+        (a, b) =>
+          rankSortValue(a.cutoff_rank) - rankSortValue(b.cutoff_rank) ||
+          Number(a.round_no) - Number(b.round_no),
+      )[0];
+
+    return {
+      ...group,
+      status,
+      rounds,
+      round_count: rounds.length,
+      rounds_label: summarizeRounds(rounds),
+      opening_rank: minRank(rankedRounds.map((round) => round.opening_rank)),
+      closing_rank: minRank(rankedRounds.map((round) => round.closing_rank)),
+      cutoff_rank: sortRound?.cutoff_rank ?? null,
+    };
+  });
+}
+
+function compareGroupedRows(a, b) {
+  return (
+    roundStatusOrder(a.status) - roundStatusOrder(b.status) ||
+    rankSortValue(a.cutoff_rank) - rankSortValue(b.cutoff_rank) ||
+    rankSortValue(a.opening_rank) - rankSortValue(b.opening_rank) ||
+    rankSortValue(a.closing_rank) - rankSortValue(b.closing_rank) ||
+    String(a.institute).localeCompare(String(b.institute)) ||
+    String(a.academic_program).localeCompare(String(b.academic_program))
+  );
+}
+
 function uniqueOptions(rows, key) {
   return sortText(new Set(rows.map((row) => row[key]).filter((value) => value !== "" && value != null)));
+}
+
+function normalizeCutoffPayload(payload) {
+  if (Array.isArray(payload)) return payload;
+  if (!Array.isArray(payload?.columns) || !Array.isArray(payload?.rows)) return [];
+
+  return payload.rows.map((values) => {
+    return Object.fromEntries(payload.columns.map((column, index) => [column, values[index]]));
+  });
 }
 
 function applyFilterChain(rows, filters, stopBeforeKey) {
@@ -87,8 +232,9 @@ function applyFilterChain(rows, filters, stopBeforeKey) {
     if (key === stopBeforeKey) {
       break;
     }
-    if (filters[key] && filters[key] !== ALL) {
-      filtered = filtered.filter((row) => row[key] === filters[key]);
+    const selected = selectedValues(filters[key]);
+    if (selected.length) {
+      filtered = filtered.filter((row) => selected.includes(row[key]));
     }
   }
 
@@ -127,7 +273,7 @@ function downloadCsv(rows) {
   const columns = [
     "status",
     "year",
-    "round_no",
+    "rounds_label",
     "institute",
     "academic_program",
     "quota",
@@ -148,24 +294,101 @@ function downloadCsv(rows) {
   URL.revokeObjectURL(url);
 }
 
+function MultiSelectFilter({
+  disabled = false,
+  label,
+  options,
+  searchIndex,
+  searchValue,
+  selected,
+  fieldKey,
+  onChange,
+  onSearchChange,
+}) {
+  const selectedList = selectedValues(selected);
+  const visibleOptions = options.filter((value) => optionMatchesSearch(searchIndex, fieldKey, value, searchValue));
+  const renderedOptions = visibleOptions.slice(0, 120);
+
+  function toggleValue(value) {
+    if (selectedList.includes(value)) {
+      onChange(selectedList.filter((selectedValue) => selectedValue !== value));
+    } else {
+      onChange([...selectedList, value]);
+    }
+  }
+
+  function selectVisible() {
+    onChange([...new Set([...selectedList, ...visibleOptions])]);
+  }
+
+  return (
+    <details className={`multi-filter${disabled ? " is-disabled" : ""}`}>
+      <summary>{label}</summary>
+      <div className="multi-menu">
+        <input
+          className="multi-search"
+          value={searchValue}
+          placeholder={`Search ${label.toLowerCase()}`}
+          onChange={(event) => onSearchChange(event.target.value)}
+          disabled={disabled}
+        />
+        <div className="multi-actions">
+          <button type="button" className="mini-button" onClick={selectVisible} disabled={disabled || !visibleOptions.length}>
+            Select shown
+          </button>
+          <button type="button" className="mini-button secondary-mini" onClick={() => onChange([])} disabled={disabled || !selectedList.length}>
+            Clear
+          </button>
+        </div>
+        <div className="option-list">
+          {renderedOptions.map((value) => (
+            <label key={value} className="check-option">
+              <input
+                type="checkbox"
+                checked={selectedList.includes(value)}
+                onChange={() => toggleValue(value)}
+                disabled={disabled}
+              />
+              <span>{value}</span>
+            </label>
+          ))}
+          {visibleOptions.length > renderedOptions.length ? (
+            <p className="option-limit">Showing first {renderedOptions.length} of {visibleOptions.length}. Keep typing to narrow.</p>
+          ) : null}
+          {!visibleOptions.length ? <p className="option-limit">No matching options.</p> : null}
+        </div>
+      </div>
+    </details>
+  );
+}
+
 function App() {
   const [rows, setRows] = useState([]);
+  const [availableYears, setAvailableYears] = useState([]);
+  const [searchIndex, setSearchIndex] = useState({});
   const [loadState, setLoadState] = useState("loading");
+  const [yearLoadState, setYearLoadState] = useState("idle");
   const [filters, setFilters] = useState(emptyFilters);
   const [submitted, setSubmitted] = useState(null);
   const [resultFilters, setResultFilters] = useState(emptyResultFilters);
+  const [filterSearches, setFilterSearches] = useState(emptyFilterSearches);
+  const [resultFilterSearches, setResultFilterSearches] = useState(emptyFilterSearches);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    fetch("/data/cutoffs.json")
-      .then((response) => {
-        if (!response.ok) {
-          throw new Error("Could not load /data/cutoffs.json");
-        }
+    Promise.all([
+      fetch("/data/manifest.json").then((response) => {
+        if (!response.ok) throw new Error("Could not load /data/manifest.json");
         return response.json();
-      })
-      .then((data) => {
-        setRows(Array.isArray(data) ? data : []);
+      }),
+      fetch("/data/search-index.json")
+        .then((response) => (response.ok ? response.json() : {}))
+        .catch(() => ({})),
+    ])
+      .then(([manifest, index]) => {
+        const years = Array.isArray(manifest?.years) ? manifest.years : [];
+        setAvailableYears(years);
+        setSearchIndex(index && typeof index === "object" ? index : {});
         setLoadState("ready");
       })
       .catch((loadError) => {
@@ -174,7 +397,41 @@ function App() {
       });
   }, []);
 
-  const yearOptions = useMemo(() => sortText(new Set(rows.map((row) => row.year))).reverse(), [rows]);
+  useEffect(() => {
+    if (!filters.year) {
+      setRows([]);
+      setYearLoadState("idle");
+      return;
+    }
+
+    const yearEntry = availableYears.find((entry) => String(entry.year) === String(filters.year));
+    if (!yearEntry) {
+      setRows([]);
+      return;
+    }
+
+    const controller = new AbortController();
+    setYearLoadState("loading");
+    fetch(`/data/${yearEntry.file}`, { signal: controller.signal })
+      .then((response) => {
+        if (!response.ok) throw new Error(`Could not load /data/${yearEntry.file}`);
+        return response.json();
+      })
+      .then((data) => {
+        setRows(normalizeCutoffPayload(data));
+        setYearLoadState("ready");
+      })
+      .catch((loadError) => {
+        if (loadError.name === "AbortError") return;
+        setRows([]);
+        setError(loadError.message);
+        setYearLoadState("error");
+      });
+
+    return () => controller.abort();
+  }, [filters.year, availableYears]);
+
+  const yearOptions = useMemo(() => sortText(new Set(availableYears.map((entry) => entry.year))).reverse(), [availableYears]);
   const roundOptions = useMemo(() => uniqueOptions(applyFilterChain(rows, filters, "institute"), "round_no"), [rows, filters]);
 
   const filterOptions = useMemo(() => {
@@ -193,20 +450,21 @@ function App() {
       .sort(compareAnalyzedRows);
   }, [rows, submitted]);
 
+  const groupedResults = useMemo(() => {
+    return groupAnalyzedRows(analyzedRows).sort(compareGroupedRows);
+  }, [analyzedRows]);
+
   const visibleResults = useMemo(() => {
     const search = resultFilters.search.trim().toLowerCase();
-    return analyzedRows.filter((row) => {
+    return groupedResults.filter((row) => {
       if (resultFilters.status !== ALL && row.status !== resultFilters.status) return false;
       for (const key of optionalFilterOrder) {
-        if (resultFilters[key] !== ALL && row[key] !== resultFilters[key]) return false;
+        const selected = selectedValues(resultFilters[key]);
+        if (selected.length && !selected.includes(row[key])) return false;
       }
-      if (!search) return true;
-      return [row.institute, row.academic_program, row.quota, row.seat_type, row.gender_pool, row.rank_type]
-        .join(" ")
-        .toLowerCase()
-        .includes(search);
+      return rowMatchesSearch(searchIndex, row, search);
     });
-  }, [analyzedRows, resultFilters]);
+  }, [groupedResults, resultFilters, searchIndex]);
 
   const summary = useMemo(() => {
     return visibleResults.reduce(
@@ -222,10 +480,10 @@ function App() {
   const resultOptions = useMemo(() => {
     const options = {};
     for (const key of optionalFilterOrder) {
-      options[key] = uniqueOptions(analyzedRows, key);
+      options[key] = uniqueOptions(groupedResults, key);
     }
     return options;
-  }, [analyzedRows]);
+  }, [groupedResults]);
 
   function updateFilter(key, value) {
     if (key === "rank" && value !== "" && !/^\d+$/.test(value)) {
@@ -236,9 +494,9 @@ function App() {
       const next = { ...current, [key]: value };
       const startIndex = optionalFilterOrder.indexOf(key);
       if (key === "year" || key === "round_no") {
-        for (const optionalKey of optionalFilterOrder) next[optionalKey] = ALL;
+        for (const optionalKey of optionalFilterOrder) next[optionalKey] = [];
       } else if (startIndex >= 0) {
-        for (const optionalKey of optionalFilterOrder.slice(startIndex + 1)) next[optionalKey] = ALL;
+        for (const optionalKey of optionalFilterOrder.slice(startIndex + 1)) next[optionalKey] = [];
       }
       if (key === "year") next.round_no = "";
       return next;
@@ -252,9 +510,22 @@ function App() {
       setError("Choose a year and positive integer rank before analyzing.");
       return;
     }
+    if (yearLoadState !== "ready") {
+      setError("Wait for the selected year's data to finish loading.");
+      return;
+    }
     setError("");
     setSubmitted({ ...filters, rank });
     setResultFilters(emptyResultFilters);
+    setResultFilterSearches(emptyFilterSearches);
+  }
+
+  function dataStatusLabel() {
+    if (loadState === "loading") return "Loading data index";
+    if (loadState === "error") return "Data index error";
+    if (yearLoadState === "loading") return `Loading ${filters.year} data`;
+    if (yearLoadState === "ready") return `${rows.length.toLocaleString()} rows loaded`;
+    return `${availableYears.length} years available`;
   }
 
   return (
@@ -264,7 +535,7 @@ function App() {
           <p className="eyebrow">Static JoSAA cutoff analysis</p>
           <h1>JoSAA Rank Analysis</h1>
         </div>
-        <div className="data-pill">{loadState === "ready" ? `${rows.length.toLocaleString()} rows loaded` : "Loading data"}</div>
+        <div className="data-pill">{dataStatusLabel()}</div>
       </header>
 
       <form className="filter-panel" onSubmit={submitAnalysis}>
@@ -312,20 +583,22 @@ function App() {
             </select>
           </label>
           {optionalFilterOrder.map((key) => (
-            <label key={key}>
-              <span>{labels[key]}</span>
-              <select value={filters[key]} onChange={(event) => updateFilter(key, event.target.value)}>
-                <option value={ALL}>All {labels[key].toLowerCase()}s</option>
-                {(filterOptions[key] || []).map((value) => (
-                  <option key={value} value={value}>{value}</option>
-                ))}
-              </select>
-            </label>
+            <MultiSelectFilter
+              key={key}
+              fieldKey={key}
+              label={labels[key]}
+              options={filterOptions[key] || []}
+              searchIndex={searchIndex}
+              searchValue={filterSearches[key]}
+              selected={filters[key]}
+              onChange={(values) => updateFilter(key, values)}
+              onSearchChange={(value) => setFilterSearches((current) => ({ ...current, [key]: value }))}
+            />
           ))}
         </div>
         <div className="filter-actions">
-          <button type="submit">Analyze rank</button>
-          <button type="button" className="secondary" onClick={() => { setFilters(emptyFilters); setSubmitted(null); setResultFilters(emptyResultFilters); setError(""); }}>
+          <button type="submit" disabled={filters.year && yearLoadState !== "ready"}>Analyze rank</button>
+          <button type="button" className="secondary" onClick={() => { setFilters(emptyFilters); setSubmitted(null); setResultFilters(emptyResultFilters); setFilterSearches(emptyFilterSearches); setResultFilterSearches(emptyFilterSearches); setError(""); }}>
             Reset
           </button>
           {error ? <p className="error-text">{error}</p> : null}
@@ -349,15 +622,18 @@ function App() {
               </select>
             </label>
             {optionalFilterOrder.map((key) => (
-              <label key={key}>
-                <span>{labels[key]}</span>
-                <select value={resultFilters[key]} onChange={(event) => setResultFilters((current) => ({ ...current, [key]: event.target.value }))} disabled={!submitted}>
-                  <option value={ALL}>All</option>
-                  {(resultOptions[key] || []).map((value) => (
-                    <option key={value} value={value}>{value}</option>
-                  ))}
-                </select>
-              </label>
+              <MultiSelectFilter
+                key={key}
+                disabled={!submitted}
+                fieldKey={key}
+                label={labels[key]}
+                options={resultOptions[key] || []}
+                searchIndex={searchIndex}
+                searchValue={resultFilterSearches[key]}
+                selected={resultFilters[key]}
+                onChange={(values) => setResultFilters((current) => ({ ...current, [key]: values }))}
+                onSearchChange={(value) => setResultFilterSearches((current) => ({ ...current, [key]: value }))}
+              />
             ))}
             <button type="button" className="secondary" onClick={() => downloadCsv(visibleResults)} disabled={!visibleResults.length}>
               Export CSV
@@ -376,8 +652,8 @@ function App() {
                   <th>Seat</th>
                   <th>Gender</th>
                   <th>Rank type</th>
-                  <th>Opening</th>
-                  <th>Closing</th>
+                  <th>Best opening</th>
+                  <th>Best closing</th>
                 </tr>
               </thead>
               <tbody>
@@ -385,17 +661,25 @@ function App() {
                   <tr><td colSpan="10" className="empty-cell">Enter a year and rank, then submit to analyze results.</td></tr>
                 ) : visibleResults.length ? (
                   visibleResults.map((row, index) => (
-                    <tr key={`${row.year}-${row.round_no}-${row.institute}-${row.academic_program}-${row.quota}-${row.seat_type}-${row.gender_pool}-${index}`} className={`row-${row.status}`}>
+                    <tr key={`${row.year}-${row.institute}-${row.academic_program}-${row.quota}-${row.seat_type}-${row.gender_pool}-${index}`} className={`row-${row.status}`}>
                       <td><span className={`status-dot status-${row.status}`}>{statusLabel(row.status)}</span></td>
-                      <td>Round {row.round_no}</td>
+                      <td>
+                        <div className="round-stack">
+                          {row.rounds.map((round) => (
+                            <span key={`${row.institute}-${row.academic_program}-${round.round_no}`} className={`round-chip round-${round.status}`}>
+                              R{round.round_no} {formatRank(round.opening_rank)}-{formatRank(round.closing_rank)}
+                            </span>
+                          ))}
+                        </div>
+                      </td>
                       <td>{row.institute}</td>
                       <td>{row.academic_program}</td>
                       <td>{row.quota}</td>
                       <td>{row.seat_type}</td>
                       <td>{row.gender_pool}</td>
                       <td>{row.rank_type}</td>
-                      <td>{row.opening_rank ?? "-"}</td>
-                      <td>{row.closing_rank ?? "-"}</td>
+                      <td>{formatRank(row.opening_rank)}</td>
+                      <td>{formatRank(row.closing_rank)}</td>
                     </tr>
                   ))
                 ) : (

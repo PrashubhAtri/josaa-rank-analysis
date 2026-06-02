@@ -1,0 +1,29 @@
+{
+  "years": [
+    {
+      "year": 2021,
+      "file": "cutoffs-2021.json",
+      "rows": 55584
+    },
+    {
+      "year": 2022,
+      "file": "cutoffs-2022.json",
+      "rows": 58874
+    },
+    {
+      "year": 2023,
+      "file": "cutoffs-2023.json",
+      "rows": 62859
+    },
+    {
+      "year": 2024,
+      "file": "cutoffs-2024.json",
+      "rows": 56913
+    },
+    {
+      "year": 2025,
+      "file": "cutoffs-2025.json",
+      "rows": 72183
+    }
+  ]
+}
