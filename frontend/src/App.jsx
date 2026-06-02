@@ -53,6 +53,16 @@ const emptyFilterSearches = Object.fromEntries(optionalFilterOrder.map((key) => 
 
 const waitForPaint = () => new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)));
 
+const TOP_7_IITS = [
+  "Indian Institute of Technology Delhi",
+  "Indian Institute of Technology Bombay",
+  "Indian Institute of Technology Madras",
+  "Indian Institute of Technology Kharagpur",
+  "Indian Institute of Technology Kanpur",
+  "Indian Institute of Technology Roorkee",
+  "Indian Institute of Technology Guwahati",
+];
+
 function sortText(values) {
   return [...values].sort((a, b) => String(a).localeCompare(String(b), undefined, { numeric: true }));
 }
@@ -83,6 +93,76 @@ function optionMatchesSearch(searchIndex, key, value, query) {
   if (!tokens.length) return true;
   const haystack = optionSearchText(searchIndex, key, value);
   return tokens.every((token) => haystack.includes(token));
+}
+
+function isIit(value) {
+  return String(value).startsWith("Indian Institute of Technology");
+}
+
+function isTopFieldProgram(value) {
+  const program = normalizeSearch(value);
+
+  return (
+    program.includes("computer science") ||
+    program.includes("computer engineering") ||
+    program.includes(" cse ") ||
+    program.startsWith("cse ") ||
+    program.endsWith(" cse") ||
+    program.includes("information technology") ||
+    program.includes("electronics and communication") ||
+    program.includes("electronics communication") ||
+    program.includes(" ece ") ||
+    program.startsWith("ece ") ||
+    program.endsWith(" ece") ||
+    program.includes("electronics and electrical communication") ||
+    program.includes("electrical and electronics") ||
+    program.includes("electrical engineering")
+  );
+}
+
+function specialPresetsFor(fieldKey, options, searchIndex) {
+  if (fieldKey === "institute") {
+    return [
+      {
+        label: "All IITs",
+        values: options.filter(isIit),
+      },
+      {
+        label: "Top 7 IITs",
+        values: TOP_7_IITS.filter((institute) => options.includes(institute)),
+      },
+    ];
+  }
+
+  if (fieldKey === "academic_program") {
+    return [
+      {
+        label: "Top fields",
+        values: options.filter(isTopFieldProgram),
+      },
+    ];
+  }
+
+  return [];
+}
+
+function specialOptionRank(fieldKey, value) {
+  if (fieldKey === "institute") {
+    const topIndex = TOP_7_IITS.indexOf(value);
+    if (topIndex >= 0) return topIndex;
+    if (isIit(value)) return 100;
+  }
+
+  if (fieldKey === "academic_program" && isTopFieldProgram(value)) {
+    const program = normalizeSearch(value);
+    if (program.includes("computer science") || program.includes(" cse ")) return 0;
+    if (program.includes("electronics and communication") || program.includes(" ece ")) return 1;
+    if (program.includes("electrical engineering") || program.includes("electrical and electronics")) return 2;
+    if (program.includes("information technology")) return 3;
+    return 10;
+  }
+
+  return 1000;
 }
 
 function rowMatchesSearch(searchIndex, row, query) {
@@ -308,8 +388,14 @@ function MultiSelectFilter({
   onSearchChange,
 }) {
   const selectedList = selectedValues(selected);
-  const visibleOptions = options.filter((value) => optionMatchesSearch(searchIndex, fieldKey, value, searchValue));
+  const visibleOptions = options
+    .filter((value) => optionMatchesSearch(searchIndex, fieldKey, value, searchValue))
+    .sort((a, b) => {
+      const rankDelta = specialOptionRank(fieldKey, a) - specialOptionRank(fieldKey, b);
+      return rankDelta || String(a).localeCompare(String(b), undefined, { numeric: true });
+    });
   const renderedOptions = visibleOptions.slice(0, 120);
+  const specialPresets = specialPresetsFor(fieldKey, options, searchIndex).filter((preset) => preset.values.length);
 
   function toggleValue(value) {
     if (selectedList.includes(value)) {
@@ -334,6 +420,24 @@ function MultiSelectFilter({
           onChange={(event) => onSearchChange(event.target.value)}
           disabled={disabled}
         />
+        {specialPresets.length ? (
+          <div className="preset-block">
+            <span>Quick picks</span>
+            <div className="preset-actions">
+              {specialPresets.map((preset) => (
+                <button
+                  key={preset.label}
+                  type="button"
+                  className="preset-button"
+                  onClick={() => onChange(preset.values)}
+                  disabled={disabled}
+                >
+                  {preset.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
         <div className="multi-actions">
           <button type="button" className="mini-button" onClick={selectVisible} disabled={disabled || !visibleOptions.length}>
             Select shown

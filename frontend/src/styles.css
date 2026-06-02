@@ -205,6 +205,43 @@ select:focus {
   gap: 7px;
 }
 
+.preset-block {
+  background: #f3faf8;
+  border: 1px solid #d7ebe6;
+  border-radius: 7px;
+  display: grid;
+  gap: 6px;
+  padding: 7px;
+}
+
+.preset-block > span {
+  color: #557077;
+  font-size: 0.7rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.preset-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.preset-button {
+  background: #155e6b;
+  border: 1px solid #155e6b;
+  box-shadow: none;
+  color: #ffffff;
+  font-size: 0.76rem;
+  min-height: 30px;
+  padding: 5px 9px;
+}
+
+.preset-button:hover:not(:disabled) {
+  background: #104f5b;
+  box-shadow: none;
+}
+
 .mini-button {
   box-shadow: none;
   font-size: 0.76rem;
