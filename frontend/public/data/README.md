@@ -26,7 +26,7 @@ The fields are:
 To rebuild from CSV files in this repository, run this from the repository root:
 
 ```bash
-python3 frontend/scripts/build_static_data.py
+python3 data/build_static_data.py
 ```
 
 The script reads `data/raw/*.csv` and writes:
