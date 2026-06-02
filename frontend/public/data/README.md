@@ -3,6 +3,9 @@
 Place production cutoff data in this folder as yearly JSON files plus a manifest.
 The app also uses `search-index.json` for preprocessed searchable aliases and option matching.
 
+The app can run without Python as long as these generated JSON files are present.
+Python is only needed to rebuild this folder from CSV source data.
+
 Each yearly cutoff file is a compact JSON object with:
 
 - `columns`: field names
@@ -26,7 +29,7 @@ The fields are:
 To rebuild from CSV files in this repository, run this from the repository root:
 
 ```bash
-python3 frontend/scripts/build_static_data.py
+python3 data/build_static_data.py
 ```
 
 The script reads `data/raw/*.csv` and writes:

@@ -1,8 +1,113 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Badge } from "./components/ui/badge";
+import { Button } from "./components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "./components/ui/card";
+import { Input, Select } from "./components/ui/input";
+import { Sheet } from "./components/ui/sheet";
+import { Skeleton } from "./components/ui/skeleton";
 
 const ALL = "ALL";
+const optionalFilterOrder = [
+  "institute",
+  "academic_program",
+  "quota",
+  "seat_type",
+  "gender_pool",
+  "rank_type",
+] as const;
 
-const emptyFilters = {
+type OptionalFilterKey = (typeof optionalFilterOrder)[number];
+type MultiFilterKey = "compare_years" | OptionalFilterKey;
+type RankBasis = "closing_rank" | "opening_rank";
+type Status = "possible" | "not-possible" | "no-data";
+type ResultStatus = Status | typeof ALL;
+type RankValue = string | number | null | undefined;
+type SearchIndex = Record<string, Record<string, string>>;
+type ThemeMode = "light" | "dark";
+
+type Filters = {
+  year: string;
+  compare_years: string[];
+  round_no: string;
+  rank: string;
+  rankBasis: RankBasis;
+} & Record<OptionalFilterKey, string[]>;
+
+type SubmittedFilters = Omit<Filters, "rank"> & {
+  rank: number;
+};
+
+type ResultFilters = {
+  status: ResultStatus;
+  search: string;
+} & Record<OptionalFilterKey, string[]>;
+
+type FilterSearches = Record<MultiFilterKey, string>;
+
+type ManifestEntry = {
+  year: string | number;
+  file: string;
+};
+
+type CutoffRow = {
+  year: string | number;
+  round_no: string | number;
+  opening_rank?: RankValue;
+  closing_rank?: RankValue;
+  institute: string;
+  academic_program: string;
+  quota: string;
+  seat_type: string;
+  gender_pool: string;
+  rank_type: string;
+  [key: string]: unknown;
+};
+
+type AnalyzedRow = CutoffRow & {
+  cutoff_rank: RankValue;
+  status: Status;
+};
+
+type AnalyzedRound = {
+  year: string | number;
+  round_no: string | number;
+  opening_rank: RankValue;
+  closing_rank: RankValue;
+  cutoff_rank: RankValue;
+  buffer: number | null;
+  status: Status;
+};
+
+type GroupedRow = AnalyzedRow & {
+  rounds: AnalyzedRound[];
+  round_count: number;
+  rounds_label: string;
+  opening_rank: RankValue;
+  closing_rank: RankValue;
+  cutoff_rank: RankValue;
+  buffer: number | null;
+  buffer_label: string;
+};
+
+type CutoffPayload = CutoffRow[] | {
+  columns?: string[];
+  rows?: RankValue[][];
+};
+
+type MultiSelectFilterProps = {
+  disabled?: boolean;
+  label: string;
+  placeholder?: string;
+  options: string[];
+  searchIndex: SearchIndex;
+  searchValue: string;
+  selected: string[] | string;
+  fieldKey: MultiFilterKey;
+  onChange: (values: string[]) => void;
+  onSearchChange: (value: string) => void;
+};
+
+const emptyFilters: Filters = {
   year: "",
   compare_years: [],
   round_no: "",
@@ -16,7 +121,7 @@ const emptyFilters = {
   rank_type: [],
 };
 
-const emptyResultFilters = {
+const emptyResultFilters: ResultFilters = {
   status: ALL,
   institute: [],
   academic_program: [],
@@ -27,16 +132,7 @@ const emptyResultFilters = {
   search: "",
 };
 
-const optionalFilterOrder = [
-  "institute",
-  "academic_program",
-  "quota",
-  "seat_type",
-  "gender_pool",
-  "rank_type",
-];
-
-const labels = {
+const labels: Record<keyof Filters | "status", string> = {
   year: "Year",
   compare_years: "Compare years",
   round_no: "Round",
@@ -51,9 +147,11 @@ const labels = {
   status: "Status",
 };
 
-const emptyFilterSearches = Object.fromEntries(["compare_years", ...optionalFilterOrder].map((key) => [key, ""]));
+const emptyFilterSearches = Object.fromEntries(
+  ["compare_years", ...optionalFilterOrder].map((key) => [key, ""]),
+) as FilterSearches;
 
-const waitForPaint = () => new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)));
+const waitForPaint = () => new Promise<void>((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)));
 
 const TOP_7_IITS = [
   "Indian Institute of Technology Delhi",
@@ -64,12 +162,19 @@ const TOP_7_IITS = [
   "Indian Institute of Technology Roorkee",
   "Indian Institute of Technology Guwahati",
 ];
+const RESULT_RENDER_LIMIT = 500;
 
-function sortText(values) {
-  return [...values].sort((a, b) => String(a).localeCompare(String(b), undefined, { numeric: true }));
+function initialTheme(): ThemeMode {
+  const stored = window.localStorage.getItem("theme");
+  if (stored === "light" || stored === "dark") return stored;
+  return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
-function normalizeSearch(value) {
+function sortText(values: Iterable<RankValue>) {
+  return [...values].map(String).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+}
+
+function normalizeSearch(value: RankValue) {
   return String(value || "")
     .toLowerCase()
     .replaceAll("&", " and ")
@@ -78,31 +183,33 @@ function normalizeSearch(value) {
     .trim();
 }
 
-function searchTokens(value) {
+function searchTokens(value: string) {
   return normalizeSearch(value).split(" ").filter(Boolean);
 }
 
-function selectedValues(value) {
-  return Array.isArray(value) ? value : value && value !== ALL ? [value] : [];
+function selectedValues(value: string[] | string | number | null | undefined) {
+  return Array.isArray(value) ? value.map(String) : value && value !== ALL ? [String(value)] : [];
 }
 
-function decodeList(value) {
+function decodeList(value: string | null) {
   return value ? value.split("|").map(decodeURIComponent).filter(Boolean) : [];
 }
 
-function encodeList(values) {
+function encodeList(values: string[] | string | number | null | undefined) {
   return selectedValues(values).map(encodeURIComponent).join("|");
 }
 
-function initialFiltersFromUrl() {
+function initialFiltersFromUrl(): Filters {
   const params = new URLSearchParams(window.location.search);
+  const rankBasis = params.get("rankBasis") === "opening_rank" ? "opening_rank" : "closing_rank";
+
   return {
     ...emptyFilters,
     year: params.get("year") || "",
     compare_years: decodeList(params.get("compare_years")),
     round_no: params.get("round_no") || "",
     rank: params.get("rank") || "",
-    rankBasis: params.get("rankBasis") || "closing_rank",
+    rankBasis,
     institute: decodeList(params.get("institute")),
     academic_program: decodeList(params.get("academic_program")),
     quota: decodeList(params.get("quota")),
@@ -112,22 +219,22 @@ function initialFiltersFromUrl() {
   };
 }
 
-function optionSearchText(searchIndex, key, value) {
-  return normalizeSearch(`${value} ${searchIndex[key]?.[value] || ""}`);
+function optionSearchText(searchIndex: SearchIndex, key: string, value: RankValue) {
+  return normalizeSearch(`${value} ${searchIndex[key]?.[String(value)] || ""}`);
 }
 
-function optionMatchesSearch(searchIndex, key, value, query) {
+function optionMatchesSearch(searchIndex: SearchIndex, key: string, value: string, query: string) {
   const tokens = searchTokens(query);
   if (!tokens.length) return true;
   const haystack = optionSearchText(searchIndex, key, value);
   return tokens.every((token) => haystack.includes(token));
 }
 
-function isIit(value) {
+function isIit(value: RankValue) {
   return String(value).startsWith("Indian Institute of Technology");
 }
 
-function isTopFieldProgram(value) {
+function isTopFieldProgram(value: RankValue) {
   const program = normalizeSearch(value);
 
   return (
@@ -148,7 +255,7 @@ function isTopFieldProgram(value) {
   );
 }
 
-function specialPresetsFor(fieldKey, options, searchIndex) {
+function specialPresetsFor(fieldKey: MultiFilterKey, options: string[], searchIndex: SearchIndex) {
   if (fieldKey === "institute") {
     return [
       {
@@ -174,7 +281,7 @@ function specialPresetsFor(fieldKey, options, searchIndex) {
   return [];
 }
 
-function specialOptionRank(fieldKey, value) {
+function specialOptionRank(fieldKey: MultiFilterKey, value: string) {
   if (fieldKey === "institute") {
     const topIndex = TOP_7_IITS.indexOf(value);
     if (topIndex >= 0) return topIndex;
@@ -193,12 +300,12 @@ function specialOptionRank(fieldKey, value) {
   return 1000;
 }
 
-function presetIsSelected(selected, values) {
+function presetIsSelected(selected: string[] | string, values: string[]) {
   const selectedSet = new Set(selectedValues(selected));
   return values.length > 0 && values.every((value) => selectedSet.has(value));
 }
 
-function rowMatchesSearch(searchIndex, row, query) {
+function rowMatchesSearch(searchIndex: SearchIndex, row: GroupedRow, query: string) {
   const tokens = searchTokens(query);
   if (!tokens.length) return true;
   const haystack = optionalFilterOrder
@@ -207,11 +314,11 @@ function rowMatchesSearch(searchIndex, row, query) {
   return tokens.every((token) => haystack.includes(token));
 }
 
-function rankSortValue(value) {
+function rankSortValue(value: RankValue) {
   return value == null || Number.isNaN(Number(value)) ? Number.POSITIVE_INFINITY : Number(value);
 }
 
-function compareAnalyzedRows(a, b) {
+function compareAnalyzedRows(a: AnalyzedRow, b: AnalyzedRow) {
   const order = { possible: 0, "not-possible": 1, "no-data": 2 };
   return (
     order[a.status] - order[b.status] ||
@@ -223,11 +330,11 @@ function compareAnalyzedRows(a, b) {
   );
 }
 
-function roundStatusOrder(status) {
+function roundStatusOrder(status: Status) {
   return { possible: 0, "not-possible": 1, "no-data": 2 }[status] ?? 3;
 }
 
-function groupKey(row) {
+function groupKey(row: CutoffRow) {
   return [
     row.institute,
     row.academic_program,
@@ -238,35 +345,39 @@ function groupKey(row) {
   ].join("\u001f");
 }
 
-function formatRank(value) {
+function formatRank(value: RankValue) {
   return value == null || !Number.isFinite(Number(value)) ? "-" : Number(value).toLocaleString();
 }
 
-function formatBuffer(value) {
+function formatBuffer(value: number | null | undefined) {
   if (value == null || !Number.isFinite(Number(value))) return "-";
   return value >= 0 ? `+${formatRank(value)}` : formatRank(value);
 }
 
-function bufferLabel(value, status) {
+function bufferLabel(value: number | null | undefined, status: Status) {
   if (status === "no-data" || value == null || !Number.isFinite(Number(value))) return "No data";
   if (value >= 1000) return "Safe";
   if (value >= 0) return "Close";
   return "Reach";
 }
 
-function minRank(values) {
+function minRank(values: RankValue[]) {
   const numericValues = values.map(Number).filter(Number.isFinite);
   return numericValues.length ? Math.min(...numericValues) : null;
 }
 
-function summarizeRounds(rounds) {
+function summarizeRounds(rounds: AnalyzedRound[]) {
   return rounds
     .map((round) => `${round.year} R${round.round_no}: ${formatRank(round.opening_rank)}-${formatRank(round.closing_rank)} (${statusLabel(round.status)})`)
     .join("; ");
 }
 
-function groupAnalyzedRows(rows, rank) {
-  const groups = new Map();
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function groupAnalyzedRows(rows: AnalyzedRow[], rank: number) {
+  const groups = new Map<string, GroupedRow>();
 
   for (const row of rows) {
     const key = groupKey(row);
@@ -280,10 +391,12 @@ function groupAnalyzedRows(rows, rank) {
         rounds: [],
         round_count: 0,
         rounds_label: "",
+        buffer: null,
+        buffer_label: "No data",
       });
     }
 
-    const group = groups.get(key);
+    const group = groups.get(key)!;
     group.rounds.push({
       year: row.year,
       round_no: row.round_no,
@@ -295,12 +408,12 @@ function groupAnalyzedRows(rows, rank) {
     });
   }
 
-  return [...groups.values()].map((group) => {
+  return [...groups.values()].map<GroupedRow>((group) => {
     const rounds = group.rounds.sort((a, b) => Number(a.year) - Number(b.year) || Number(a.round_no) - Number(b.round_no));
     const rankedRounds = rounds.filter((round) => round.cutoff_rank != null);
     const possibleRounds = rounds.filter((round) => round.status === "possible");
     const notPossibleRounds = rounds.filter((round) => round.status === "not-possible");
-    const status = possibleRounds.length ? "possible" : notPossibleRounds.length ? "not-possible" : "no-data";
+    const status: Status = possibleRounds.length ? "possible" : notPossibleRounds.length ? "not-possible" : "no-data";
     const statusRounds = status === "possible" ? possibleRounds : status === "not-possible" ? notPossibleRounds : rounds;
     const sortRound = statusRounds
       .slice()
@@ -325,7 +438,7 @@ function groupAnalyzedRows(rows, rank) {
   });
 }
 
-function compareGroupedRows(a, b) {
+function compareGroupedRows(a: GroupedRow, b: GroupedRow) {
   return (
     roundStatusOrder(a.status) - roundStatusOrder(b.status) ||
     rankSortValue(a.cutoff_rank) - rankSortValue(b.cutoff_rank) ||
@@ -336,20 +449,21 @@ function compareGroupedRows(a, b) {
   );
 }
 
-function uniqueOptions(rows, key) {
+function uniqueOptions(rows: CutoffRow[], key: OptionalFilterKey | "round_no") {
   return sortText(new Set(rows.map((row) => row[key]).filter((value) => value !== "" && value != null)));
 }
 
-function normalizeCutoffPayload(payload) {
+function normalizeCutoffPayload(payload: CutoffPayload): CutoffRow[] {
   if (Array.isArray(payload)) return payload;
   if (!Array.isArray(payload?.columns) || !Array.isArray(payload?.rows)) return [];
+  const { columns, rows } = payload;
 
-  return payload.rows.map((values) => {
-    return Object.fromEntries(payload.columns.map((column, index) => [column, values[index]]));
+  return rows.map((values) => {
+    return Object.fromEntries(columns.map((column, index) => [column, values[index]])) as CutoffRow;
   });
 }
 
-function applyFilterChain(rows, filters, stopBeforeKey) {
+function applyFilterChain(rows: CutoffRow[], filters: Filters | SubmittedFilters, stopBeforeKey?: OptionalFilterKey) {
   let filtered = rows;
 
   if (filters.year) {
@@ -365,15 +479,15 @@ function applyFilterChain(rows, filters, stopBeforeKey) {
     }
     const selected = selectedValues(filters[key]);
     if (selected.length) {
-      filtered = filtered.filter((row) => selected.includes(row[key]));
+      filtered = filtered.filter((row) => selected.includes(String(row[key])));
     }
   }
 
   return filtered;
 }
 
-function analyzeRow(row, rank, rankBasis) {
-  const cutoff = row[rankBasis];
+function analyzeRow(row: CutoffRow, rank: number, rankBasis: RankBasis): AnalyzedRow {
+  const cutoff = row[rankBasis] as RankValue;
   if (cutoff == null || Number.isNaN(Number(cutoff))) {
     return { ...row, cutoff_rank: null, status: "no-data" };
   }
@@ -384,14 +498,14 @@ function analyzeRow(row, rank, rankBasis) {
   };
 }
 
-function statusLabel(status) {
+function statusLabel(status: ResultStatus) {
   if (status === "possible") return "Possible";
   if (status === "not-possible") return "Not possible";
   if (status === "no-data") return "No cutoff";
   return "All statuses";
 }
 
-function csvEscape(value) {
+function csvEscape(value: unknown) {
   if (value == null) return "";
   const text = String(value);
   if (/[",\n]/.test(text)) {
@@ -400,7 +514,38 @@ function csvEscape(value) {
   return text;
 }
 
-function downloadCsv(rows) {
+function CheckIcon() {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+      <path d="M13.3 4.2 6.4 11 3.2 7.8" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
+    </svg>
+  );
+}
+
+function ThemeIcon({ theme }: { theme: ThemeMode }) {
+  if (theme === "dark") {
+    return (
+      <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+        <path d="M10 2.5v2M10 15.5v2M4.7 4.7l1.4 1.4M13.9 13.9l1.4 1.4M2.5 10h2M15.5 10h2M4.7 15.3l1.4-1.4M13.9 6.1l1.4-1.4" fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="1.6" />
+        <circle cx="10" cy="10" r="3.2" fill="none" stroke="currentColor" strokeWidth="1.6" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+      <path d="M15.7 12.4A6.2 6.2 0 0 1 7.6 4.3 6.8 6.8 0 1 0 15.7 12.4Z" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.7" />
+    </svg>
+  );
+}
+
+function multiValueLabel(selectedList: string[], placeholder: string) {
+  if (!selectedList.length) return placeholder;
+  if (selectedList.length === 1) return selectedList[0];
+  return `${selectedList.length} selected`;
+}
+
+function downloadCsv(rows: GroupedRow[]) {
   const columns = [
     "status",
     "year",
@@ -428,6 +573,7 @@ function downloadCsv(rows) {
 function MultiSelectFilter({
   disabled = false,
   label,
+  placeholder = "Any",
   options,
   searchIndex,
   searchValue,
@@ -435,8 +581,7 @@ function MultiSelectFilter({
   fieldKey,
   onChange,
   onSearchChange,
-}) {
-  const [isOpen, setIsOpen] = useState(false);
+}: MultiSelectFilterProps) {
   const selectedList = selectedValues(selected);
   const visibleOptions = options
     .filter((value) => optionMatchesSearch(searchIndex, fieldKey, value, searchValue))
@@ -447,7 +592,7 @@ function MultiSelectFilter({
   const renderedOptions = visibleOptions.slice(0, 120);
   const specialPresets = specialPresetsFor(fieldKey, options, searchIndex).filter((preset) => preset.values.length);
 
-  function toggleValue(value) {
+  function toggleValue(value: string) {
     if (selectedList.includes(value)) {
       onChange(selectedList.filter((selectedValue) => selectedValue !== value));
     } else {
@@ -460,90 +605,107 @@ function MultiSelectFilter({
   }
 
   return (
-    <div className={`multi-filter${disabled ? " is-disabled" : ""}${isOpen ? " is-open" : ""}`}>
-      <button
-        type="button"
-        className="multi-trigger"
-        onClick={() => setIsOpen((current) => !current)}
-        disabled={disabled}
-      >
-        <span>{label}</span>
-        {selectedList.length ? <strong>{selectedList.length}</strong> : null}
-      </button>
-      {isOpen ? (
-      <div className="multi-menu">
-        <input
-          className="multi-search"
-          value={searchValue}
-          placeholder={`Search ${label.toLowerCase()}`}
-          onChange={(event) => onSearchChange(event.target.value)}
-          disabled={disabled}
-        />
-        {specialPresets.length ? (
-          <div className="preset-block">
-            <span>Quick picks</span>
-            <div className="preset-actions">
-              {specialPresets.map((preset) => (
-              <button
-                key={preset.label}
-                type="button"
-                className={`preset-button${presetIsSelected(selectedList, preset.values) ? " is-active" : ""}`}
-                onClick={() => onChange(preset.values)}
-                disabled={disabled}
-              >
-                  {preset.label}
-                </button>
-              ))}
+    <div className={`filter-field multi-filter-field${disabled ? " is-disabled" : ""}`}>
+      <span className="filter-label">{label}</span>
+      <details className="multi-filter">
+        <summary>
+          <span className={`filter-control-value${selectedList.length ? "" : " is-placeholder"}`}>
+            {multiValueLabel(selectedList, placeholder)}
+          </span>
+          {selectedList.length ? <span className="filter-count">{selectedList.length}</span> : null}
+        </summary>
+        <div className="multi-menu">
+          <Input
+            className="multi-search"
+            value={searchValue}
+            placeholder={`Search ${label.toLowerCase()}`}
+            onChange={(event) => onSearchChange(event.target.value)}
+            disabled={disabled}
+          />
+          {specialPresets.length ? (
+            <div className="preset-block">
+              <span>Quick picks</span>
+              <div className="preset-actions">
+                {specialPresets.map((preset) => (
+                  <Button
+                    key={preset.label}
+                    type="button"
+                    variant="chip"
+                    className={`preset-button${presetIsSelected(selectedList, preset.values) ? " is-active" : ""}`}
+                    onClick={() => onChange(preset.values)}
+                    disabled={disabled}
+                  >
+                    {preset.label}
+                  </Button>
+                ))}
+              </div>
             </div>
-          </div>
-        ) : null}
-        <div className="multi-actions">
-          <button type="button" className="mini-button" onClick={selectVisible} disabled={disabled || !visibleOptions.length}>
-            Select shown
-          </button>
-          <button type="button" className="mini-button secondary-mini" onClick={() => onChange([])} disabled={disabled || !selectedList.length}>
-            Clear
-          </button>
-        </div>
-        <div className="option-list">
-          {renderedOptions.map((value) => (
-            <label key={value} className="check-option">
-              <input
-                type="checkbox"
-                checked={selectedList.includes(value)}
-                onChange={() => toggleValue(value)}
-                disabled={disabled}
-              />
-              <span>{value}</span>
-            </label>
-          ))}
-          {visibleOptions.length > renderedOptions.length ? (
-            <p className="option-limit">Showing first {renderedOptions.length} of {visibleOptions.length}. Keep typing to narrow.</p>
           ) : null}
-          {!visibleOptions.length ? <p className="option-limit">No matching options.</p> : null}
+          <div className="multi-actions">
+            <Button type="button" variant="mini" className="mini-button" onClick={selectVisible} disabled={disabled || !visibleOptions.length}>
+              Select shown
+            </Button>
+            <Button type="button" variant="mini" className="mini-button secondary-mini" onClick={() => onChange([])} disabled={disabled || !selectedList.length}>
+              Clear
+            </Button>
+          </div>
+          <div className="option-list">
+            {renderedOptions.map((value) => {
+              const isSelected = selectedList.includes(value);
+              return (
+                <label key={value} className={`check-option${isSelected ? " is-selected" : ""}`}>
+                  <input
+                    className="check-option-input"
+                    type="checkbox"
+                    checked={isSelected}
+                    onChange={() => toggleValue(value)}
+                    disabled={disabled}
+                  />
+                  <span className="check-indicator">{isSelected ? <CheckIcon /> : null}</span>
+                  <span className="check-text">{value}</span>
+                </label>
+              );
+            })}
+            {visibleOptions.length > renderedOptions.length ? (
+              <p className="option-limit">Showing first {renderedOptions.length} of {visibleOptions.length}. Keep typing to narrow.</p>
+            ) : null}
+            {!visibleOptions.length ? <p className="option-limit">No matching options.</p> : null}
+          </div>
         </div>
-      </div>
-      ) : null}
+      </details>
     </div>
   );
 }
 
 function App() {
   const didAutoSubmitFromUrl = useRef(false);
-  const [yearRows, setYearRows] = useState({});
-  const [availableYears, setAvailableYears] = useState([]);
-  const [searchIndex, setSearchIndex] = useState({});
+  const [theme, setTheme] = useState<ThemeMode>(initialTheme);
+  const [yearRows, setYearRows] = useState<Record<string, CutoffRow[]>>({});
+  const [availableYears, setAvailableYears] = useState<ManifestEntry[]>([]);
+  const [searchIndex, setSearchIndex] = useState<SearchIndex>({});
   const [loadState, setLoadState] = useState("loading");
   const [yearLoadState, setYearLoadState] = useState("idle");
   const [filters, setFilters] = useState(initialFiltersFromUrl);
-  const [submitted, setSubmitted] = useState(null);
+  const [submitted, setSubmitted] = useState<SubmittedFilters | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [bestOnly, setBestOnly] = useState(false);
-  const [selectedDetail, setSelectedDetail] = useState(null);
+  const [selectedDetail, setSelectedDetail] = useState<GroupedRow | null>(null);
   const [resultFilters, setResultFilters] = useState(emptyResultFilters);
   const [filterSearches, setFilterSearches] = useState(emptyFilterSearches);
   const [resultFilterSearches, setResultFilterSearches] = useState(emptyFilterSearches);
   const [error, setError] = useState("");
+  const [toast, setToast] = useState("");
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    window.localStorage.setItem("theme", theme);
+  }, [theme]);
+
+  useEffect(() => {
+    if (!toast) return;
+    const timeout = window.setTimeout(() => setToast(""), 2400);
+    return () => window.clearTimeout(timeout);
+  }, [toast]);
 
   useEffect(() => {
     Promise.all([
@@ -555,14 +717,14 @@ function App() {
         .then((response) => (response.ok ? response.json() : {}))
         .catch(() => ({})),
     ])
-      .then(([manifest, index]) => {
+      .then(([manifest, index]: [{ years?: ManifestEntry[] }, SearchIndex]) => {
         const years = Array.isArray(manifest?.years) ? manifest.years : [];
         setAvailableYears(years);
         setSearchIndex(index && typeof index === "object" ? index : {});
         setLoadState("ready");
       })
-      .catch((loadError) => {
-        setError(loadError.message);
+      .catch((loadError: unknown) => {
+        setError(errorMessage(loadError));
         setLoadState("error");
       });
   }, []);
@@ -572,7 +734,8 @@ function App() {
       setYearLoadState("idle");
       return;
     }
-    if (loadState !== "ready" || !availableYears.length) {
+    if (loadState !== "ready") {
+      setYearLoadState("idle");
       return;
     }
 
@@ -580,6 +743,12 @@ function App() {
     const missingYears = yearsToLoad.filter((year) => !yearRows[year]);
     if (!missingYears.length) {
       setYearLoadState("ready");
+      return;
+    }
+    const missingEntries = missingYears.filter((year) => !availableYears.some((entry) => String(entry.year) === String(year)));
+    if (missingEntries.length) {
+      setError(`No data file listed for ${missingEntries.join(", ")}`);
+      setYearLoadState("error");
       return;
     }
 
@@ -594,7 +763,7 @@ function App() {
           if (!response.ok) throw new Error(`Could not load /data/${yearEntry.file}`);
           return response.json();
         })
-        .then((data) => [year, normalizeCutoffPayload(data)]);
+        .then((data: CutoffPayload) => [year, normalizeCutoffPayload(data)] as const);
     }))
       .then((loadedYears) => {
         setYearRows((current) => {
@@ -604,9 +773,9 @@ function App() {
         });
         setYearLoadState("ready");
       })
-      .catch((loadError) => {
-        if (loadError.name === "AbortError") return;
-        setError(loadError.message);
+      .catch((loadError: unknown) => {
+        if (loadError instanceof Error && loadError.name === "AbortError") return;
+        setError(errorMessage(loadError));
         setYearLoadState("error");
       });
 
@@ -622,7 +791,7 @@ function App() {
   const roundOptions = useMemo(() => uniqueOptions(applyFilterChain(rows, filters, "institute"), "round_no"), [rows, filters]);
 
   const filterOptions = useMemo(() => {
-    const options = {};
+    const options = {} as Record<OptionalFilterKey, string[]>;
     for (const key of optionalFilterOrder) {
       options[key] = uniqueOptions(applyFilterChain(rows, filters, key), key);
     }
@@ -648,7 +817,7 @@ function App() {
       if (resultFilters.status !== ALL && row.status !== resultFilters.status) return false;
       for (const key of optionalFilterOrder) {
         const selected = selectedValues(resultFilters[key]);
-        if (selected.length && !selected.includes(row[key])) return false;
+        if (selected.length && !selected.includes(String(row[key]))) return false;
       }
       return rowMatchesSearch(searchIndex, row, search);
     });
@@ -656,7 +825,7 @@ function App() {
 
   const summary = useMemo(() => {
     return visibleResults.reduce(
-      (totals, row) => {
+      (totals: { total: number } & Record<Status, number>, row) => {
         totals.total += 1;
         totals[row.status] += 1;
         return totals;
@@ -666,21 +835,28 @@ function App() {
   }, [visibleResults]);
 
   const resultOptions = useMemo(() => {
-    const options = {};
+    const options = {} as Record<OptionalFilterKey, string[]>;
     for (const key of optionalFilterOrder) {
       options[key] = uniqueOptions(groupedResults, key);
     }
     return options;
   }, [groupedResults]);
+  const displayedResults = useMemo(() => visibleResults.slice(0, RESULT_RENDER_LIMIT), [visibleResults]);
+  const hiddenResultCount = Math.max(visibleResults.length - displayedResults.length, 0);
 
-  function updateFilter(key, value) {
-    if (key === "rank" && value !== "" && !/^\d+$/.test(value)) {
+  function updateFilter(key: keyof Filters, value: string | string[]) {
+    if (key === "rank" && String(value) !== "" && !/^\d+$/.test(String(value))) {
       return;
     }
 
     setFilters((current) => {
-      const next = { ...current, [key]: value };
-      const startIndex = optionalFilterOrder.indexOf(key);
+      const next = { ...current };
+      if (key === "rankBasis") {
+        next.rankBasis = value === "opening_rank" ? "opening_rank" : "closing_rank";
+      } else {
+        Object.assign(next, { [key]: value });
+      }
+      const startIndex = optionalFilterOrder.indexOf(key as OptionalFilterKey);
       if (key === "year" || key === "round_no") {
         for (const optionalKey of optionalFilterOrder) next[optionalKey] = [];
       } else if (startIndex >= 0) {
@@ -694,12 +870,12 @@ function App() {
     });
   }
 
-  function updateShareUrl(nextFilters = submitted || filters) {
+  function updateShareUrl(nextFilters: Filters | SubmittedFilters = submitted || filters) {
     const params = new URLSearchParams();
-    for (const key of ["year", "round_no", "rank", "rankBasis"]) {
-      if (nextFilters[key]) params.set(key, nextFilters[key]);
+    for (const key of ["year", "round_no", "rank", "rankBasis"] as const) {
+      if (nextFilters[key]) params.set(key, String(nextFilters[key]));
     }
-    for (const key of ["compare_years", ...optionalFilterOrder]) {
+    for (const key of ["compare_years", ...optionalFilterOrder] as const) {
       const encoded = encodeList(nextFilters[key]);
       if (encoded) params.set(key, encoded);
     }
@@ -711,14 +887,15 @@ function App() {
   function copyShareUrl() {
     const url = updateShareUrl();
     navigator.clipboard?.writeText(url);
-    setError("Share link copied to this page URL.");
+    setError("");
+    setToast("Share link copied");
   }
 
-  function applyPreset(fieldKey, values) {
+  function applyPreset(fieldKey: OptionalFilterKey, values: string[]) {
     updateFilter(fieldKey, values);
   }
 
-  async function submitAnalysis(event) {
+  async function submitAnalysis(event?: React.FormEvent<HTMLFormElement> | React.MouseEvent<HTMLButtonElement>) {
     event?.preventDefault();
     const rank = Number(filters.rank);
     if (!filters.year || !Number.isInteger(rank) || rank <= 0) {
@@ -774,7 +951,7 @@ function App() {
       {(yearLoadState === "loading" || isAnalyzing) ? (
         <div className="loading-overlay" role="status" aria-live="polite">
           <div className="loader-card">
-            <span className="spinner" aria-hidden="true" />
+            <Skeleton className="loader-skeleton" aria-hidden="true" />
             <div>
               <strong>{isAnalyzing ? "Analyzing rank" : `Loading ${filters.year} data`}</strong>
               <p>{isAnalyzing ? "Preparing grouped college and course results..." : "Fetching cutoff data for the selected year..."}</p>
@@ -784,47 +961,67 @@ function App() {
       ) : null}
       <header className="page-header">
         <div>
-          <p className="eyebrow">Static JoSAA cutoff analysis</p>
+          <div className="header-kicker">
+            <span>2021 to 2025</span>
+          </div>
           <h1>JoSAA Rank Analysis</h1>
+          <p className="header-copy">Fast rank analysis for IIT, NIT, IIIT, and GFTI counselling options.</p>
         </div>
-        <div className="data-pill">{dataStatusLabel()}</div>
+        <div className="header-actions">
+          <Badge>{dataStatusLabel()}</Badge>
+          <Button
+            type="button"
+            variant="secondary"
+            className="icon-button theme-toggle"
+            aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+            aria-pressed={theme === "dark"}
+            title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+            onClick={() => setTheme((current) => (current === "dark" ? "light" : "dark"))}
+          >
+            <ThemeIcon theme={theme} />
+          </Button>
+        </div>
       </header>
 
-      <form className="filter-panel" onSubmit={submitAnalysis}>
+      <Card className="filter-panel">
+      <form onSubmit={submitAnalysis}>
         <div className="quick-strip">
           {topInstitutePresets.map((preset) => (
-            <button
+            <Button
               key={preset.label}
               type="button"
+              variant="chip"
               className={`quick-chip${presetIsSelected(filters.institute, preset.values) ? " is-active" : ""}`}
               onClick={() => applyPreset("institute", preset.values)}
             >
               {preset.label}
-            </button>
+            </Button>
           ))}
           {topFieldPreset ? (
-            <button
+            <Button
               type="button"
+              variant="chip"
               className={`quick-chip${presetIsSelected(filters.academic_program, topFieldPreset.values) ? " is-active" : ""}`}
               onClick={() => applyPreset("academic_program", topFieldPreset.values)}
             >
               Top fields
-            </button>
+            </Button>
           ) : null}
         </div>
         <div className="filter-grid">
-          <label>
-            <span>{labels.year}</span>
-            <select value={filters.year} onChange={(event) => updateFilter("year", event.target.value)} required>
+          <label className="filter-field">
+            <span className="filter-label">{labels.year}</span>
+            <Select value={filters.year} onChange={(event) => updateFilter("year", event.target.value)} required>
               <option value="">Select year</option>
               {yearOptions.map((year) => (
                 <option key={year} value={year}>{year}</option>
               ))}
-            </select>
+            </Select>
           </label>
           <MultiSelectFilter
             fieldKey="compare_years"
             label={labels.compare_years}
+            placeholder="None"
             options={yearOptions.filter((year) => String(year) !== String(filters.year))}
             searchIndex={searchIndex}
             searchValue={filterSearches.compare_years || ""}
@@ -832,18 +1029,18 @@ function App() {
             onChange={(values) => updateFilter("compare_years", values)}
             onSearchChange={(value) => setFilterSearches((current) => ({ ...current, compare_years: value }))}
           />
-          <label>
-            <span>{labels.round_no}</span>
-            <select value={filters.round_no} onChange={(event) => updateFilter("round_no", event.target.value)}>
+          <label className="filter-field">
+            <span className="filter-label">{labels.round_no}</span>
+            <Select value={filters.round_no} onChange={(event) => updateFilter("round_no", event.target.value)}>
               <option value="">All rounds</option>
               {roundOptions.map((round) => (
                 <option key={round} value={round}>Round {round}</option>
               ))}
-            </select>
+            </Select>
           </label>
-          <label>
-            <span>{labels.rank}</span>
-            <input
+          <label className="filter-field">
+            <span className="filter-label">{labels.rank}</span>
+            <Input
               value={filters.rank}
               min="1"
               step="1"
@@ -858,12 +1055,12 @@ function App() {
               required
             />
           </label>
-          <label>
-            <span>{labels.rankBasis}</span>
-            <select value={filters.rankBasis} onChange={(event) => updateFilter("rankBasis", event.target.value)} required>
+          <label className="filter-field">
+            <span className="filter-label">{labels.rankBasis}</span>
+            <Select value={filters.rankBasis} onChange={(event) => updateFilter("rankBasis", event.target.value as RankBasis)} required>
               <option value="closing_rank">Closing rank</option>
               <option value="opening_rank">Opening rank</option>
-            </select>
+            </Select>
           </label>
           {optionalFilterOrder.map((key) => (
             <MultiSelectFilter
@@ -880,36 +1077,33 @@ function App() {
           ))}
         </div>
         <div className="filter-actions">
-          <button type="submit" disabled={filters.year && yearLoadState !== "ready"}>Analyze rank</button>
-          <button type="button" className="secondary" onClick={copyShareUrl}>
+          <Button type="submit" disabled={Boolean(filters.year && yearLoadState !== "ready")}>Analyze rank</Button>
+          <Button type="button" variant="secondary" className="secondary" onClick={copyShareUrl}>
             Copy/share link
-          </button>
-          <button type="button" className="secondary" onClick={() => { setFilters(emptyFilters); setSubmitted(null); setResultFilters(emptyResultFilters); setFilterSearches(emptyFilterSearches); setResultFilterSearches(emptyFilterSearches); setError(""); }}>
+          </Button>
+          <Button type="button" variant="secondary" className="secondary" onClick={() => { setFilters(emptyFilters); setSubmitted(null); setResultFilters(emptyResultFilters); setFilterSearches(emptyFilterSearches); setResultFilterSearches(emptyFilterSearches); setError(""); }}>
             Reset
-          </button>
+          </Button>
           {error ? <p className="error-text">{error}</p> : null}
         </div>
       </form>
+      </Card>
 
       <section className="content-grid">
-        <div className="results-area">
+        <Card className="results-area">
           <div className="result-toolbar">
             <label>
               <span>Search results</span>
-              <input value={resultFilters.search} placeholder="Institute, program, quota..." onChange={(event) => setResultFilters((current) => ({ ...current, search: event.target.value }))} />
+              <Input value={resultFilters.search} placeholder="Institute, program, quota..." onChange={(event) => setResultFilters((current) => ({ ...current, search: event.target.value }))} />
             </label>
             <label>
               <span>{labels.status}</span>
-              <select value={resultFilters.status} onChange={(event) => setResultFilters((current) => ({ ...current, status: event.target.value }))}>
+              <Select value={resultFilters.status} onChange={(event) => setResultFilters((current) => ({ ...current, status: event.target.value as ResultStatus }))}>
                 <option value={ALL}>All statuses</option>
                 <option value="possible">Possible</option>
                 <option value="not-possible">Not possible</option>
                 <option value="no-data">No cutoff</option>
-              </select>
-            </label>
-            <label className="toggle-line">
-              <input type="checkbox" checked={bestOnly} onChange={(event) => setBestOnly(event.target.checked)} />
-              <span>Best possible only</span>
+              </Select>
             </label>
             {optionalFilterOrder.map((key) => (
               <MultiSelectFilter
@@ -925,19 +1119,25 @@ function App() {
                 onSearchChange={(value) => setResultFilterSearches((current) => ({ ...current, [key]: value }))}
               />
             ))}
-            <button type="button" className="secondary" onClick={() => downloadCsv(visibleResults)} disabled={!visibleResults.length}>
-              Export CSV
-            </button>
+            <div className="result-filter-footer">
+              <label className="standalone-checkbox">
+                <input type="checkbox" checked={bestOnly} onChange={(event) => setBestOnly(event.target.checked)} />
+                <span>Best possible only</span>
+              </label>
+              <Button type="button" variant="secondary" className="secondary" onClick={() => downloadCsv(visibleResults)} disabled={!visibleResults.length}>
+                Export CSV
+              </Button>
+            </div>
           </div>
 
           <div className="mobile-results">
             {!submitted ? (
-              <div className="empty-card">Enter a year and rank, then submit to analyze results.</div>
-            ) : visibleResults.length ? (
-              visibleResults.map((row, index) => (
+              <Card className="empty-card">Enter a year and rank, then submit to analyze results.</Card>
+            ) : displayedResults.length ? (
+              displayedResults.map((row, index) => (
                 <article key={`mobile-${row.year}-${row.institute}-${row.academic_program}-${row.quota}-${row.seat_type}-${row.gender_pool}-${index}`} className={`result-card row-${row.status}`}>
                   <div className="card-topline">
-                    <span className={`status-dot status-${row.status}`}>{statusLabel(row.status)}</span>
+                    <Badge variant={row.status}>{statusLabel(row.status)}</Badge>
                     <span>{row.quota} / {row.seat_type} / {row.rank_type}</span>
                   </div>
                   <h3>{row.institute}</h3>
@@ -955,11 +1155,11 @@ function App() {
                     <div><dt>Best opening</dt><dd>{formatRank(row.opening_rank)}</dd></div>
                     <div><dt>Best closing</dt><dd>{formatRank(row.closing_rank)}</dd></div>
                   </dl>
-                  <button type="button" className="card-detail-button" onClick={() => setSelectedDetail(row)}>Open details</button>
+                  <Button type="button" className="card-detail-button" onClick={() => setSelectedDetail(row)}>Open details</Button>
                 </article>
               ))
             ) : (
-              <div className="empty-card">No rows match the current result filters.</div>
+              <Card className="empty-card">No rows match the current result filters.</Card>
             )}
           </div>
 
@@ -983,11 +1183,11 @@ function App() {
               </thead>
               <tbody>
                 {!submitted ? (
-                  <tr><td colSpan="12" className="empty-cell">Enter a year and rank, then submit to analyze results.</td></tr>
-                ) : visibleResults.length ? (
-                  visibleResults.map((row, index) => (
+                  <tr><td colSpan={12} className="empty-cell">Enter a year and rank to analyze results.</td></tr>
+                ) : displayedResults.length ? (
+                  displayedResults.map((row, index) => (
                     <tr key={`${row.year}-${row.institute}-${row.academic_program}-${row.quota}-${row.seat_type}-${row.gender_pool}-${index}`} className={`row-${row.status}`}>
-                      <td><span className={`status-dot status-${row.status}`}>{statusLabel(row.status)}</span></td>
+                      <td><Badge variant={row.status}>{statusLabel(row.status)}</Badge></td>
                       <td>
                         <div className="round-stack">
                           {row.rounds.map((round) => (
@@ -1006,19 +1206,27 @@ function App() {
                       <td><span className={`buffer-pill buffer-${normalizeSearch(row.buffer_label)}`}>{row.buffer_label} {formatBuffer(row.buffer)}</span></td>
                       <td>{formatRank(row.opening_rank)}</td>
                       <td>{formatRank(row.closing_rank)}</td>
-                      <td><button type="button" className="mini-button secondary-mini" onClick={() => setSelectedDetail(row)}>Open</button></td>
+                      <td><Button type="button" variant="mini" className="mini-button secondary-mini" onClick={() => setSelectedDetail(row)}>Open</Button></td>
                     </tr>
                   ))
                 ) : (
-                  <tr><td colSpan="12" className="empty-cell">No rows match the current result filters.</td></tr>
+                  <tr><td colSpan={12} className="empty-cell">No rows match the current result filters.</td></tr>
                 )}
               </tbody>
             </table>
           </div>
-        </div>
+          {hiddenResultCount ? (
+            <p className="result-limit-note">
+              Showing first {displayedResults.length.toLocaleString()} of {visibleResults.length.toLocaleString()} matching rows. Use result filters or search to narrow before reviewing every row.
+            </p>
+          ) : null}
+        </Card>
 
-        <aside className="summary-panel">
-          <h2>Summary</h2>
+        <Card className="summary-panel">
+          <CardHeader>
+            <CardTitle>Summary</CardTitle>
+          </CardHeader>
+          <CardContent>
           <dl>
             <div><dt>Visible rows</dt><dd>{summary.total.toLocaleString()}</dd></div>
             <div><dt>Possible</dt><dd>{summary.possible.toLocaleString()}</dd></div>
@@ -1033,20 +1241,14 @@ function App() {
           ) : (
             <p>Submit a rank analysis to populate possible, not possible, and missing cutoff groups.</p>
           )}
-        </aside>
+          </CardContent>
+        </Card>
       </section>
 
-      <div className="mobile-action-bar">
-        <button type="button" onClick={() => document.querySelector(".filter-panel")?.scrollIntoView({ behavior: "smooth" })}>Filters</button>
-        <button type="button" onClick={submitAnalysis} disabled={!filters.year || yearLoadState !== "ready"}>Analyze</button>
-        <span>{visibleResults.length.toLocaleString()} results</span>
-      </div>
-
       {selectedDetail ? (
-        <div className="detail-backdrop" role="dialog" aria-modal="true">
-          <aside className="detail-drawer">
-            <button type="button" className="detail-close" onClick={() => setSelectedDetail(null)}>Close</button>
-            <span className={`status-dot status-${selectedDetail.status}`}>{statusLabel(selectedDetail.status)}</span>
+        <Sheet>
+            <Button type="button" variant="secondary" className="detail-close" onClick={() => setSelectedDetail(null)}>Close</Button>
+            <Badge variant={selectedDetail.status}>{statusLabel(selectedDetail.status)}</Badge>
             <h2>{selectedDetail.institute}</h2>
             <p>{selectedDetail.academic_program}</p>
             <dl className="detail-meta">
@@ -1066,9 +1268,9 @@ function App() {
                 </div>
               ))}
             </div>
-          </aside>
-        </div>
+        </Sheet>
       ) : null}
+      {toast ? <div className="toast" role="status">{toast}</div> : null}
     </main>
   );
 }
