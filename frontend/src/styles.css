@@ -258,7 +258,7 @@ h1 {
 
 .ui-button:focus-visible,
 .ui-input:focus,
-.multi-filter summary:focus-visible,
+.multi-trigger:focus-visible,
 .check-option-input:focus-visible + .check-indicator {
   outline: none;
   box-shadow: 0 0 0 3px var(--focus-ring);
@@ -433,9 +433,11 @@ h1 {
 .filter-control-value {
   color: var(--text);
   display: block;
+  flex: 1 1 auto;
   font-size: 0.875rem;
   font-weight: 500;
   min-width: 0;
+  order: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -457,7 +459,9 @@ h1 {
   font-weight: 700;
   height: 20px;
   justify-content: center;
+  margin-left: 2px;
   min-width: 20px;
+  order: 3;
   padding: 0 6px;
 }
 
@@ -473,6 +477,7 @@ h1 {
 }
 
 .multi-trigger {
+  appearance: none;
   align-items: center;
   color: var(--text);
   cursor: pointer;
@@ -484,25 +489,40 @@ h1 {
   justify-content: space-between;
   list-style: none;
   padding: 0 10px;
+  user-select: none;
 }
 
-.multi-filter summary::-webkit-details-marker {
+.multi-trigger::-webkit-details-marker {
   display: none;
 }
 
-.multi-filter summary::after {
+.multi-trigger::marker {
+  content: "";
+  display: none;
+  font-size: 0;
+}
+
+.multi-trigger::after {
   color: var(--muted);
   content: "";
   border-bottom: 1.5px solid currentColor;
   border-right: 1.5px solid currentColor;
+  flex: 0 0 auto;
   height: 6px;
+  margin-left: auto;
+  order: 2;
   transform: rotate(45deg) translateY(-2px);
   transition: transform 140ms cubic-bezier(0.16, 1, 0.3, 1);
   width: 6px;
 }
 
-.multi-filter[open] summary::after {
+.multi-filter[open] .multi-trigger::after {
   transform: rotate(225deg) translateY(-2px);
+}
+
+.multi-filter[open] {
+  border-color: var(--line-strong);
+  z-index: 35;
 }
 
 .multi-trigger strong {
@@ -565,8 +585,27 @@ h1 {
 }
 
 .secondary-mini {
-  background: #ffffff;
-  color: var(--primary);
+  background: var(--surface-raised);
+  border-color: var(--line-strong);
+  color: var(--text);
+}
+
+.secondary-mini:hover:not(:disabled) {
+  background: var(--surface-subtle);
+  color: var(--ink);
+}
+
+.open-detail-button {
+  background: var(--surface-subtle);
+  border-color: var(--line-strong);
+  color: var(--text);
+  min-width: 54px;
+}
+
+.open-detail-button:hover:not(:disabled) {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--primary-ink);
 }
 
 .option-limit {
@@ -1141,6 +1180,32 @@ dd {
   z-index: 40;
 }
 
+.app-footer {
+  align-items: center;
+  color: var(--muted);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 0.86rem;
+  font-weight: 600;
+  gap: 8px 10px;
+  justify-content: center;
+  line-height: 1.45;
+  margin: 22px auto 0;
+  padding: 8px 12px 4px;
+  text-align: center;
+}
+
+.app-footer a {
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.app-footer a:hover {
+  color: var(--primary);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 @media (max-width: 1000px) {
   .filter-grid > .filter-field {
     grid-column: span 4;
@@ -1225,7 +1290,7 @@ dd {
 
   .ui-button,
   .ui-input,
-  .multi-filter summary {
+  .multi-trigger {
     min-height: 42px;
   }
 

@@ -608,7 +608,7 @@ function MultiSelectFilter({
     <div className={`filter-field multi-filter-field${disabled ? " is-disabled" : ""}`}>
       <span className="filter-label">{label}</span>
       <details className="multi-filter">
-        <summary>
+        <summary className="multi-trigger">
           <span className={`filter-control-value${selectedList.length ? "" : " is-placeholder"}`}>
             {multiValueLabel(selectedList, placeholder)}
           </span>
@@ -1206,7 +1206,7 @@ function App() {
                       <td><span className={`buffer-pill buffer-${normalizeSearch(row.buffer_label)}`}>{row.buffer_label} {formatBuffer(row.buffer)}</span></td>
                       <td>{formatRank(row.opening_rank)}</td>
                       <td>{formatRank(row.closing_rank)}</td>
-                      <td><Button type="button" variant="mini" className="mini-button secondary-mini" onClick={() => setSelectedDetail(row)}>Open</Button></td>
+                      <td><Button type="button" variant="mini" className="mini-button open-detail-button" onClick={() => setSelectedDetail(row)}>Open</Button></td>
                     </tr>
                   ))
                 ) : (
@@ -1270,6 +1270,10 @@ function App() {
             </div>
         </Sheet>
       ) : null}
+      <footer className="app-footer">
+        <span>Made by me for students to find information easier.</span>
+        <a href="https://github.com/PrashubhAtri" target="_blank" rel="noreferrer">@PrashubhAtri</a>
+      </footer>
       {toast ? <div className="toast" role="status">{toast}</div> : null}
     </main>
   );
