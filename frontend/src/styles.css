@@ -307,6 +307,59 @@ button:disabled {
   opacity: 0.55;
 }
 
+.loading-overlay {
+  align-items: center;
+  background: rgba(245, 247, 246, 0.72);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: 20px;
+  position: fixed;
+  z-index: 20;
+}
+
+.loader-card {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #d8e4e1;
+  border-radius: 8px;
+  box-shadow: 0 18px 50px rgba(24, 42, 46, 0.18);
+  display: flex;
+  gap: 14px;
+  max-width: 360px;
+  padding: 18px;
+  width: 100%;
+}
+
+.loader-card strong {
+  color: #173c45;
+  display: block;
+  font-size: 1rem;
+  margin-bottom: 3px;
+}
+
+.loader-card p {
+  color: #5a6d72;
+  line-height: 1.4;
+  margin: 0;
+}
+
+.spinner {
+  animation: spin 800ms linear infinite;
+  border: 3px solid #cfe5e1;
+  border-top-color: #155e6b;
+  border-radius: 999px;
+  flex: 0 0 auto;
+  height: 34px;
+  width: 34px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .error-text {
   background: #fff2f2;
   border: 1px solid #ffcaca;
@@ -354,6 +407,10 @@ button:disabled {
   min-height: 360px;
   overflow: auto;
   width: 100%;
+}
+
+.mobile-results {
+  display: none;
 }
 
 table {
@@ -594,7 +651,12 @@ dd {
   }
 
   .summary-panel {
+    order: -1;
     position: static;
+  }
+
+  dl {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .table-wrap {
@@ -602,9 +664,175 @@ dd {
   }
 }
 
+@media (max-width: 760px) {
+  .app-shell {
+    padding: 10px;
+  }
+
+  .page-header {
+    align-items: stretch;
+    gap: 12px;
+    padding: 16px;
+  }
+
+  h1 {
+    font-size: clamp(1.7rem, 9vw, 2.35rem);
+  }
+
+  .data-pill {
+    align-self: start;
+    font-size: 0.82rem;
+    padding: 8px 10px;
+  }
+
+  .filter-panel {
+    padding: 12px;
+    position: static;
+  }
+
+  .filter-grid,
+  .result-toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .filter-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .filter-actions .error-text {
+    grid-column: 1 / -1;
+  }
+
+  button,
+  input,
+  select,
+  .multi-filter summary {
+    min-height: 42px;
+  }
+
+  .multi-filter[open] {
+    grid-column: 1 / -1;
+  }
+
+  .option-list {
+    max-height: 220px;
+  }
+
+  .results-area {
+    padding: 12px;
+  }
+
+  .result-toolbar {
+    align-items: stretch;
+  }
+
+  .table-wrap {
+    display: none;
+  }
+
+  .mobile-results {
+    display: grid;
+    gap: 10px;
+  }
+
+  .result-card,
+  .empty-card {
+    border: 1px solid #dce8e4;
+    border-radius: 8px;
+    padding: 12px;
+  }
+
+  .result-card.row-possible {
+    background: #f2fbf4;
+    border-color: #d4ead9;
+  }
+
+  .result-card.row-not-possible {
+    background: #fff5f4;
+    border-color: #f2d8d5;
+  }
+
+  .result-card.row-no-data {
+    background: #f5f7f7;
+  }
+
+  .result-card h3 {
+    color: #172b30;
+    font-size: 1rem;
+    line-height: 1.25;
+    margin: 10px 0 5px;
+  }
+
+  .result-card p {
+    color: #34464b;
+    line-height: 1.35;
+    margin: 0 0 10px;
+  }
+
+  .card-topline {
+    align-items: center;
+    color: #63777c;
+    display: flex;
+    flex-wrap: wrap;
+    font-size: 0.78rem;
+    font-weight: 800;
+    gap: 8px;
+    justify-content: space-between;
+  }
+
+  .card-metrics {
+    display: grid;
+    gap: 8px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    margin: 12px 0 0;
+  }
+
+  .card-metrics div {
+    align-items: start;
+    display: grid;
+    gap: 3px;
+    padding: 8px;
+  }
+
+  .card-metrics dt {
+    font-size: 0.7rem;
+  }
+
+  .card-metrics dd {
+    font-size: 0.9rem;
+    overflow-wrap: anywhere;
+  }
+
+  .round-stack {
+    gap: 5px;
+  }
+
+  .round-chip {
+    font-size: 0.72rem;
+  }
+
+  .summary-panel {
+    padding: 12px;
+  }
+
+  dl {
+    grid-template-columns: 1fr 1fr;
+    margin: 12px 0;
+  }
+
+  dl div {
+    padding: 9px 10px;
+  }
+
+  dd {
+    font-size: 1.05rem;
+  }
+}
+
 @media (max-width: 680px) {
   .app-shell {
-    padding: 14px;
+    padding: 10px;
   }
 
   .page-header {
@@ -614,5 +842,17 @@ dd {
 
   .filter-panel {
     top: 0;
+  }
+}
+
+@media (max-width: 420px) {
+  .filter-actions,
+  .card-metrics,
+  dl {
+    grid-template-columns: 1fr;
+  }
+
+  .loader-card {
+    align-items: flex-start;
   }
 }

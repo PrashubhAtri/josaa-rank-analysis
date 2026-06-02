@@ -51,6 +51,8 @@ const labels = {
 
 const emptyFilterSearches = Object.fromEntries(optionalFilterOrder.map((key) => [key, ""]));
 
+const waitForPaint = () => new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)));
+
 function sortText(values) {
   return [...values].sort((a, b) => String(a).localeCompare(String(b), undefined, { numeric: true }));
 }
@@ -370,6 +372,7 @@ function App() {
   const [yearLoadState, setYearLoadState] = useState("idle");
   const [filters, setFilters] = useState(emptyFilters);
   const [submitted, setSubmitted] = useState(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [resultFilters, setResultFilters] = useState(emptyResultFilters);
   const [filterSearches, setFilterSearches] = useState(emptyFilterSearches);
   const [resultFilterSearches, setResultFilterSearches] = useState(emptyFilterSearches);
@@ -503,7 +506,7 @@ function App() {
     });
   }
 
-  function submitAnalysis(event) {
+  async function submitAnalysis(event) {
     event.preventDefault();
     const rank = Number(filters.rank);
     if (!filters.year || !Number.isInteger(rank) || rank <= 0) {
@@ -515,9 +518,12 @@ function App() {
       return;
     }
     setError("");
+    setIsAnalyzing(true);
+    await waitForPaint();
     setSubmitted({ ...filters, rank });
     setResultFilters(emptyResultFilters);
     setResultFilterSearches(emptyFilterSearches);
+    window.setTimeout(() => setIsAnalyzing(false), 120);
   }
 
   function dataStatusLabel() {
@@ -530,6 +536,17 @@ function App() {
 
   return (
     <main className="app-shell">
+      {(yearLoadState === "loading" || isAnalyzing) ? (
+        <div className="loading-overlay" role="status" aria-live="polite">
+          <div className="loader-card">
+            <span className="spinner" aria-hidden="true" />
+            <div>
+              <strong>{isAnalyzing ? "Analyzing rank" : `Loading ${filters.year} data`}</strong>
+              <p>{isAnalyzing ? "Preparing grouped college and course results..." : "Fetching cutoff data for the selected year..."}</p>
+            </div>
+          </div>
+        </div>
+      ) : null}
       <header className="page-header">
         <div>
           <p className="eyebrow">Static JoSAA cutoff analysis</p>
@@ -638,6 +655,37 @@ function App() {
             <button type="button" className="secondary" onClick={() => downloadCsv(visibleResults)} disabled={!visibleResults.length}>
               Export CSV
             </button>
+          </div>
+
+          <div className="mobile-results">
+            {!submitted ? (
+              <div className="empty-card">Enter a year and rank, then submit to analyze results.</div>
+            ) : visibleResults.length ? (
+              visibleResults.map((row, index) => (
+                <article key={`mobile-${row.year}-${row.institute}-${row.academic_program}-${row.quota}-${row.seat_type}-${row.gender_pool}-${index}`} className={`result-card row-${row.status}`}>
+                  <div className="card-topline">
+                    <span className={`status-dot status-${row.status}`}>{statusLabel(row.status)}</span>
+                    <span>{row.quota} / {row.seat_type} / {row.rank_type}</span>
+                  </div>
+                  <h3>{row.institute}</h3>
+                  <p>{row.academic_program}</p>
+                  <div className="round-stack">
+                    {row.rounds.map((round) => (
+                      <span key={`mobile-${row.institute}-${row.academic_program}-${round.round_no}`} className={`round-chip round-${round.status}`}>
+                        R{round.round_no} {formatRank(round.opening_rank)}-{formatRank(round.closing_rank)}
+                      </span>
+                    ))}
+                  </div>
+                  <dl className="card-metrics">
+                    <div><dt>Gender</dt><dd>{row.gender_pool}</dd></div>
+                    <div><dt>Best opening</dt><dd>{formatRank(row.opening_rank)}</dd></div>
+                    <div><dt>Best closing</dt><dd>{formatRank(row.closing_rank)}</dd></div>
+                  </dl>
+                </article>
+              ))
+            ) : (
+              <div className="empty-card">No rows match the current result filters.</div>
+            )}
           </div>
 
           <div className="table-wrap">
