@@ -4,6 +4,7 @@ const ALL = "ALL";
 
 const emptyFilters = {
   year: "",
+  compare_years: [],
   round_no: "",
   rank: "",
   rankBasis: "closing_rank",
@@ -37,6 +38,7 @@ const optionalFilterOrder = [
 
 const labels = {
   year: "Year",
+  compare_years: "Compare years",
   round_no: "Round",
   rank: "Rank",
   rankBasis: "Rank basis",
@@ -49,7 +51,7 @@ const labels = {
   status: "Status",
 };
 
-const emptyFilterSearches = Object.fromEntries(optionalFilterOrder.map((key) => [key, ""]));
+const emptyFilterSearches = Object.fromEntries(["compare_years", ...optionalFilterOrder].map((key) => [key, ""]));
 
 const waitForPaint = () => new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)));
 
@@ -82,6 +84,32 @@ function searchTokens(value) {
 
 function selectedValues(value) {
   return Array.isArray(value) ? value : value && value !== ALL ? [value] : [];
+}
+
+function decodeList(value) {
+  return value ? value.split("|").map(decodeURIComponent).filter(Boolean) : [];
+}
+
+function encodeList(values) {
+  return selectedValues(values).map(encodeURIComponent).join("|");
+}
+
+function initialFiltersFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  return {
+    ...emptyFilters,
+    year: params.get("year") || "",
+    compare_years: decodeList(params.get("compare_years")),
+    round_no: params.get("round_no") || "",
+    rank: params.get("rank") || "",
+    rankBasis: params.get("rankBasis") || "closing_rank",
+    institute: decodeList(params.get("institute")),
+    academic_program: decodeList(params.get("academic_program")),
+    quota: decodeList(params.get("quota")),
+    seat_type: decodeList(params.get("seat_type")),
+    gender_pool: decodeList(params.get("gender_pool")),
+    rank_type: decodeList(params.get("rank_type")),
+  };
 }
 
 function optionSearchText(searchIndex, key, value) {
@@ -209,6 +237,18 @@ function formatRank(value) {
   return value == null || !Number.isFinite(Number(value)) ? "-" : Number(value).toLocaleString();
 }
 
+function formatBuffer(value) {
+  if (value == null || !Number.isFinite(Number(value))) return "-";
+  return value >= 0 ? `+${formatRank(value)}` : formatRank(value);
+}
+
+function bufferLabel(value, status) {
+  if (status === "no-data" || value == null || !Number.isFinite(Number(value))) return "No data";
+  if (value >= 1000) return "Safe";
+  if (value >= 0) return "Close";
+  return "Reach";
+}
+
 function minRank(values) {
   const numericValues = values.map(Number).filter(Number.isFinite);
   return numericValues.length ? Math.min(...numericValues) : null;
@@ -216,11 +256,11 @@ function minRank(values) {
 
 function summarizeRounds(rounds) {
   return rounds
-    .map((round) => `R${round.round_no}: ${formatRank(round.opening_rank)}-${formatRank(round.closing_rank)} (${statusLabel(round.status)})`)
+    .map((round) => `${round.year} R${round.round_no}: ${formatRank(round.opening_rank)}-${formatRank(round.closing_rank)} (${statusLabel(round.status)})`)
     .join("; ");
 }
 
-function groupAnalyzedRows(rows) {
+function groupAnalyzedRows(rows, rank) {
   const groups = new Map();
 
   for (const row of rows) {
@@ -240,16 +280,18 @@ function groupAnalyzedRows(rows) {
 
     const group = groups.get(key);
     group.rounds.push({
+      year: row.year,
       round_no: row.round_no,
       opening_rank: row.opening_rank,
       closing_rank: row.closing_rank,
       cutoff_rank: row.cutoff_rank,
+      buffer: row.cutoff_rank == null ? null : Number(row.cutoff_rank) - rank,
       status: row.status,
     });
   }
 
   return [...groups.values()].map((group) => {
-    const rounds = group.rounds.sort((a, b) => Number(a.round_no) - Number(b.round_no));
+    const rounds = group.rounds.sort((a, b) => Number(a.year) - Number(b.year) || Number(a.round_no) - Number(b.round_no));
     const rankedRounds = rounds.filter((round) => round.cutoff_rank != null);
     const possibleRounds = rounds.filter((round) => round.status === "possible");
     const notPossibleRounds = rounds.filter((round) => round.status === "not-possible");
@@ -272,6 +314,8 @@ function groupAnalyzedRows(rows) {
       opening_rank: minRank(rankedRounds.map((round) => round.opening_rank)),
       closing_rank: minRank(rankedRounds.map((round) => round.closing_rank)),
       cutoff_rank: sortRound?.cutoff_rank ?? null,
+      buffer: sortRound?.buffer ?? null,
+      buffer_label: bufferLabel(sortRound?.buffer, status),
     };
   });
 }
@@ -469,14 +513,16 @@ function MultiSelectFilter({
 }
 
 function App() {
-  const [rows, setRows] = useState([]);
+  const [yearRows, setYearRows] = useState({});
   const [availableYears, setAvailableYears] = useState([]);
   const [searchIndex, setSearchIndex] = useState({});
   const [loadState, setLoadState] = useState("loading");
   const [yearLoadState, setYearLoadState] = useState("idle");
-  const [filters, setFilters] = useState(emptyFilters);
+  const [filters, setFilters] = useState(initialFiltersFromUrl);
   const [submitted, setSubmitted] = useState(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [bestOnly, setBestOnly] = useState(false);
+  const [selectedDetail, setSelectedDetail] = useState(null);
   const [resultFilters, setResultFilters] = useState(emptyResultFilters);
   const [filterSearches, setFilterSearches] = useState(emptyFilterSearches);
   const [resultFilterSearches, setResultFilterSearches] = useState(emptyFilterSearches);
@@ -506,39 +552,53 @@ function App() {
 
   useEffect(() => {
     if (!filters.year) {
-      setRows([]);
       setYearLoadState("idle");
       return;
     }
 
-    const yearEntry = availableYears.find((entry) => String(entry.year) === String(filters.year));
-    if (!yearEntry) {
-      setRows([]);
+    const yearsToLoad = [...new Set([filters.year, ...selectedValues(filters.compare_years)].filter(Boolean).map(String))];
+    const missingYears = yearsToLoad.filter((year) => !yearRows[year]);
+    if (!missingYears.length) {
+      setYearLoadState("ready");
       return;
     }
 
     const controller = new AbortController();
     setYearLoadState("loading");
-    fetch(`/data/${yearEntry.file}`, { signal: controller.signal })
-      .then((response) => {
-        if (!response.ok) throw new Error(`Could not load /data/${yearEntry.file}`);
-        return response.json();
-      })
-      .then((data) => {
-        setRows(normalizeCutoffPayload(data));
+
+    Promise.all(missingYears.map((year) => {
+      const yearEntry = availableYears.find((entry) => String(entry.year) === String(year));
+      if (!yearEntry) throw new Error(`No data file listed for ${year}`);
+      return fetch(`/data/${yearEntry.file}`, { signal: controller.signal })
+        .then((response) => {
+          if (!response.ok) throw new Error(`Could not load /data/${yearEntry.file}`);
+          return response.json();
+        })
+        .then((data) => [year, normalizeCutoffPayload(data)]);
+    }))
+      .then((loadedYears) => {
+        setYearRows((current) => {
+          const next = { ...current };
+          for (const [year, data] of loadedYears) next[year] = data;
+          return next;
+        });
         setYearLoadState("ready");
       })
       .catch((loadError) => {
         if (loadError.name === "AbortError") return;
-        setRows([]);
         setError(loadError.message);
         setYearLoadState("error");
       });
 
     return () => controller.abort();
-  }, [filters.year, availableYears]);
+  }, [filters.year, filters.compare_years, availableYears, yearRows]);
 
   const yearOptions = useMemo(() => sortText(new Set(availableYears.map((entry) => entry.year))).reverse(), [availableYears]);
+  const rows = useMemo(() => yearRows[String(filters.year)] || [], [yearRows, filters.year]);
+  const analysisRows = useMemo(() => {
+    const years = [...new Set([filters.year, ...selectedValues(filters.compare_years)].filter(Boolean).map(String))];
+    return years.flatMap((year) => yearRows[year] || []);
+  }, [yearRows, filters.year, filters.compare_years]);
   const roundOptions = useMemo(() => uniqueOptions(applyFilterChain(rows, filters, "institute"), "round_no"), [rows, filters]);
 
   const filterOptions = useMemo(() => {
@@ -552,18 +612,19 @@ function App() {
   const analyzedRows = useMemo(() => {
     if (!submitted) return [];
     const rank = Number(submitted.rank);
-    return applyFilterChain(rows, submitted)
+    return applyFilterChain(analysisRows, { ...submitted, year: "" })
       .map((row) => analyzeRow(row, rank, submitted.rankBasis))
       .sort(compareAnalyzedRows);
-  }, [rows, submitted]);
+  }, [analysisRows, submitted]);
 
   const groupedResults = useMemo(() => {
-    return groupAnalyzedRows(analyzedRows).sort(compareGroupedRows);
-  }, [analyzedRows]);
+    return groupAnalyzedRows(analyzedRows, Number(submitted?.rank || 0)).sort(compareGroupedRows);
+  }, [analyzedRows, submitted]);
 
   const visibleResults = useMemo(() => {
     const search = resultFilters.search.trim().toLowerCase();
     return groupedResults.filter((row) => {
+      if (bestOnly && row.status !== "possible") return false;
       if (resultFilters.status !== ALL && row.status !== resultFilters.status) return false;
       for (const key of optionalFilterOrder) {
         const selected = selectedValues(resultFilters[key]);
@@ -571,7 +632,7 @@ function App() {
       }
       return rowMatchesSearch(searchIndex, row, search);
     });
-  }, [groupedResults, resultFilters, searchIndex]);
+  }, [groupedResults, resultFilters, searchIndex, bestOnly]);
 
   const summary = useMemo(() => {
     return visibleResults.reduce(
@@ -605,13 +666,40 @@ function App() {
       } else if (startIndex >= 0) {
         for (const optionalKey of optionalFilterOrder.slice(startIndex + 1)) next[optionalKey] = [];
       }
-      if (key === "year") next.round_no = "";
+      if (key === "year") {
+        next.round_no = "";
+        next.compare_years = selectedValues(next.compare_years).filter((year) => String(year) !== String(value));
+      }
       return next;
     });
   }
 
+  function updateShareUrl(nextFilters = submitted || filters) {
+    const params = new URLSearchParams();
+    for (const key of ["year", "round_no", "rank", "rankBasis"]) {
+      if (nextFilters[key]) params.set(key, nextFilters[key]);
+    }
+    for (const key of ["compare_years", ...optionalFilterOrder]) {
+      const encoded = encodeList(nextFilters[key]);
+      if (encoded) params.set(key, encoded);
+    }
+    const nextUrl = `${window.location.pathname}?${params.toString()}`;
+    window.history.replaceState(null, "", nextUrl);
+    return `${window.location.origin}${nextUrl}`;
+  }
+
+  function copyShareUrl() {
+    const url = updateShareUrl();
+    navigator.clipboard?.writeText(url);
+    setError("Share link copied to this page URL.");
+  }
+
+  function applyPreset(fieldKey, values) {
+    updateFilter(fieldKey, values);
+  }
+
   async function submitAnalysis(event) {
-    event.preventDefault();
+    event?.preventDefault();
     const rank = Number(filters.rank);
     if (!filters.year || !Number.isInteger(rank) || rank <= 0) {
       setError("Choose a year and positive integer rank before analyzing.");
@@ -625,6 +713,7 @@ function App() {
     setIsAnalyzing(true);
     await waitForPaint();
     setSubmitted({ ...filters, rank });
+    updateShareUrl({ ...filters, rank });
     setResultFilters(emptyResultFilters);
     setResultFilterSearches(emptyFilterSearches);
     window.setTimeout(() => setIsAnalyzing(false), 120);
@@ -634,9 +723,12 @@ function App() {
     if (loadState === "loading") return "Loading data index";
     if (loadState === "error") return "Data index error";
     if (yearLoadState === "loading") return `Loading ${filters.year} data`;
-    if (yearLoadState === "ready") return `${rows.length.toLocaleString()} rows loaded`;
+    if (yearLoadState === "ready") return `${analysisRows.length.toLocaleString()} rows loaded`;
     return `${availableYears.length} years available`;
   }
+
+  const topInstitutePresets = specialPresetsFor("institute", filterOptions.institute || [], searchIndex);
+  const topFieldPreset = specialPresetsFor("academic_program", filterOptions.academic_program || [], searchIndex)[0];
 
   return (
     <main className="app-shell">
@@ -660,6 +752,18 @@ function App() {
       </header>
 
       <form className="filter-panel" onSubmit={submitAnalysis}>
+        <div className="quick-strip">
+          {topInstitutePresets.map((preset) => (
+            <button key={preset.label} type="button" className="quick-chip" onClick={() => applyPreset("institute", preset.values)}>
+              {preset.label}
+            </button>
+          ))}
+          {topFieldPreset ? (
+            <button type="button" className="quick-chip" onClick={() => applyPreset("academic_program", topFieldPreset.values)}>
+              Top fields
+            </button>
+          ) : null}
+        </div>
         <div className="filter-grid">
           <label>
             <span>{labels.year}</span>
@@ -670,6 +774,16 @@ function App() {
               ))}
             </select>
           </label>
+          <MultiSelectFilter
+            fieldKey="compare_years"
+            label={labels.compare_years}
+            options={yearOptions.filter((year) => String(year) !== String(filters.year))}
+            searchIndex={searchIndex}
+            searchValue={filterSearches.compare_years || ""}
+            selected={filters.compare_years}
+            onChange={(values) => updateFilter("compare_years", values)}
+            onSearchChange={(value) => setFilterSearches((current) => ({ ...current, compare_years: value }))}
+          />
           <label>
             <span>{labels.round_no}</span>
             <select value={filters.round_no} onChange={(event) => updateFilter("round_no", event.target.value)}>
@@ -719,6 +833,9 @@ function App() {
         </div>
         <div className="filter-actions">
           <button type="submit" disabled={filters.year && yearLoadState !== "ready"}>Analyze rank</button>
+          <button type="button" className="secondary" onClick={copyShareUrl}>
+            Copy/share link
+          </button>
           <button type="button" className="secondary" onClick={() => { setFilters(emptyFilters); setSubmitted(null); setResultFilters(emptyResultFilters); setFilterSearches(emptyFilterSearches); setResultFilterSearches(emptyFilterSearches); setError(""); }}>
             Reset
           </button>
@@ -741,6 +858,10 @@ function App() {
                 <option value="not-possible">Not possible</option>
                 <option value="no-data">No cutoff</option>
               </select>
+            </label>
+            <label className="toggle-line">
+              <input type="checkbox" checked={bestOnly} onChange={(event) => setBestOnly(event.target.checked)} />
+              <span>Best possible only</span>
             </label>
             {optionalFilterOrder.map((key) => (
               <MultiSelectFilter
@@ -782,9 +903,11 @@ function App() {
                   </div>
                   <dl className="card-metrics">
                     <div><dt>Gender</dt><dd>{row.gender_pool}</dd></div>
+                    <div><dt>Buffer</dt><dd>{row.buffer_label} {formatBuffer(row.buffer)}</dd></div>
                     <div><dt>Best opening</dt><dd>{formatRank(row.opening_rank)}</dd></div>
                     <div><dt>Best closing</dt><dd>{formatRank(row.closing_rank)}</dd></div>
                   </dl>
+                  <button type="button" className="card-detail-button" onClick={() => setSelectedDetail(row)}>Open details</button>
                 </article>
               ))
             ) : (
@@ -804,13 +927,15 @@ function App() {
                   <th>Seat</th>
                   <th>Gender</th>
                   <th>Rank type</th>
+                  <th>Buffer</th>
                   <th>Best opening</th>
                   <th>Best closing</th>
+                  <th>Details</th>
                 </tr>
               </thead>
               <tbody>
                 {!submitted ? (
-                  <tr><td colSpan="10" className="empty-cell">Enter a year and rank, then submit to analyze results.</td></tr>
+                  <tr><td colSpan="12" className="empty-cell">Enter a year and rank, then submit to analyze results.</td></tr>
                 ) : visibleResults.length ? (
                   visibleResults.map((row, index) => (
                     <tr key={`${row.year}-${row.institute}-${row.academic_program}-${row.quota}-${row.seat_type}-${row.gender_pool}-${index}`} className={`row-${row.status}`}>
@@ -830,12 +955,14 @@ function App() {
                       <td>{row.seat_type}</td>
                       <td>{row.gender_pool}</td>
                       <td>{row.rank_type}</td>
+                      <td><span className={`buffer-pill buffer-${normalizeSearch(row.buffer_label)}`}>{row.buffer_label} {formatBuffer(row.buffer)}</span></td>
                       <td>{formatRank(row.opening_rank)}</td>
                       <td>{formatRank(row.closing_rank)}</td>
+                      <td><button type="button" className="mini-button secondary-mini" onClick={() => setSelectedDetail(row)}>Open</button></td>
                     </tr>
                   ))
                 ) : (
-                  <tr><td colSpan="10" className="empty-cell">No rows match the current result filters.</td></tr>
+                  <tr><td colSpan="12" className="empty-cell">No rows match the current result filters.</td></tr>
                 )}
               </tbody>
             </table>
@@ -860,6 +987,40 @@ function App() {
           )}
         </aside>
       </section>
+
+      <div className="mobile-action-bar">
+        <button type="button" onClick={() => document.querySelector(".filter-panel")?.scrollIntoView({ behavior: "smooth" })}>Filters</button>
+        <button type="button" onClick={submitAnalysis} disabled={!filters.year || yearLoadState !== "ready"}>Analyze</button>
+        <span>{visibleResults.length.toLocaleString()} results</span>
+      </div>
+
+      {selectedDetail ? (
+        <div className="detail-backdrop" role="dialog" aria-modal="true">
+          <aside className="detail-drawer">
+            <button type="button" className="detail-close" onClick={() => setSelectedDetail(null)}>Close</button>
+            <span className={`status-dot status-${selectedDetail.status}`}>{statusLabel(selectedDetail.status)}</span>
+            <h2>{selectedDetail.institute}</h2>
+            <p>{selectedDetail.academic_program}</p>
+            <dl className="detail-meta">
+              <div><dt>Quota</dt><dd>{selectedDetail.quota}</dd></div>
+              <div><dt>Seat</dt><dd>{selectedDetail.seat_type}</dd></div>
+              <div><dt>Gender</dt><dd>{selectedDetail.gender_pool}</dd></div>
+              <div><dt>Rank type</dt><dd>{selectedDetail.rank_type}</dd></div>
+              <div><dt>Buffer</dt><dd>{selectedDetail.buffer_label} {formatBuffer(selectedDetail.buffer)}</dd></div>
+            </dl>
+            <div className="detail-rounds">
+              {selectedDetail.rounds.map((round) => (
+                <div key={`${round.year}-${round.round_no}`} className={`detail-round round-${round.status}`}>
+                  <strong>{round.year} Round {round.round_no}</strong>
+                  <span>Opening {formatRank(round.opening_rank)}</span>
+                  <span>Closing {formatRank(round.closing_rank)}</span>
+                  <span>{statusLabel(round.status)} / {formatBuffer(round.buffer)}</span>
+                </div>
+              ))}
+            </div>
+          </aside>
+        </div>
+      ) : null}
     </main>
   );
 }
