@@ -1,8 +1,105 @@
 import { useEffect, useMemo, useState } from "react";
 
 const ALL = "ALL";
+const optionalFilterOrder = [
+  "institute",
+  "academic_program",
+  "quota",
+  "seat_type",
+  "gender_pool",
+  "rank_type",
+] as const;
 
-const emptyFilters = {
+type OptionalFilterKey = (typeof optionalFilterOrder)[number];
+type MultiFilterKey = "compare_years" | OptionalFilterKey;
+type RankBasis = "closing_rank" | "opening_rank";
+type Status = "possible" | "not-possible" | "no-data";
+type ResultStatus = Status | typeof ALL;
+type RankValue = string | number | null | undefined;
+type SearchIndex = Record<string, Record<string, string>>;
+
+type Filters = {
+  year: string;
+  compare_years: string[];
+  round_no: string;
+  rank: string;
+  rankBasis: RankBasis;
+} & Record<OptionalFilterKey, string[]>;
+
+type SubmittedFilters = Omit<Filters, "rank"> & {
+  rank: number;
+};
+
+type ResultFilters = {
+  status: ResultStatus;
+  search: string;
+} & Record<OptionalFilterKey, string[]>;
+
+type FilterSearches = Record<MultiFilterKey, string>;
+
+type ManifestEntry = {
+  year: string | number;
+  file: string;
+};
+
+type CutoffRow = {
+  year: string | number;
+  round_no: string | number;
+  opening_rank?: RankValue;
+  closing_rank?: RankValue;
+  institute: string;
+  academic_program: string;
+  quota: string;
+  seat_type: string;
+  gender_pool: string;
+  rank_type: string;
+  [key: string]: unknown;
+};
+
+type AnalyzedRow = CutoffRow & {
+  cutoff_rank: RankValue;
+  status: Status;
+};
+
+type AnalyzedRound = {
+  year: string | number;
+  round_no: string | number;
+  opening_rank: RankValue;
+  closing_rank: RankValue;
+  cutoff_rank: RankValue;
+  buffer: number | null;
+  status: Status;
+};
+
+type GroupedRow = AnalyzedRow & {
+  rounds: AnalyzedRound[];
+  round_count: number;
+  rounds_label: string;
+  opening_rank: RankValue;
+  closing_rank: RankValue;
+  cutoff_rank: RankValue;
+  buffer: number | null;
+  buffer_label: string;
+};
+
+type CutoffPayload = CutoffRow[] | {
+  columns?: string[];
+  rows?: RankValue[][];
+};
+
+type MultiSelectFilterProps = {
+  disabled?: boolean;
+  label: string;
+  options: string[];
+  searchIndex: SearchIndex;
+  searchValue: string;
+  selected: string[] | string;
+  fieldKey: MultiFilterKey;
+  onChange: (values: string[]) => void;
+  onSearchChange: (value: string) => void;
+};
+
+const emptyFilters: Filters = {
   year: "",
   compare_years: [],
   round_no: "",
@@ -16,7 +113,7 @@ const emptyFilters = {
   rank_type: [],
 };
 
-const emptyResultFilters = {
+const emptyResultFilters: ResultFilters = {
   status: ALL,
   institute: [],
   academic_program: [],
@@ -27,16 +124,7 @@ const emptyResultFilters = {
   search: "",
 };
 
-const optionalFilterOrder = [
-  "institute",
-  "academic_program",
-  "quota",
-  "seat_type",
-  "gender_pool",
-  "rank_type",
-];
-
-const labels = {
+const labels: Record<keyof Filters | "status", string> = {
   year: "Year",
   compare_years: "Compare years",
   round_no: "Round",
@@ -51,9 +139,11 @@ const labels = {
   status: "Status",
 };
 
-const emptyFilterSearches = Object.fromEntries(["compare_years", ...optionalFilterOrder].map((key) => [key, ""]));
+const emptyFilterSearches = Object.fromEntries(
+  ["compare_years", ...optionalFilterOrder].map((key) => [key, ""]),
+) as FilterSearches;
 
-const waitForPaint = () => new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)));
+const waitForPaint = () => new Promise<void>((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)));
 
 const TOP_7_IITS = [
   "Indian Institute of Technology Delhi",
@@ -65,11 +155,11 @@ const TOP_7_IITS = [
   "Indian Institute of Technology Guwahati",
 ];
 
-function sortText(values) {
-  return [...values].sort((a, b) => String(a).localeCompare(String(b), undefined, { numeric: true }));
+function sortText(values: Iterable<RankValue>) {
+  return [...values].map(String).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
 }
 
-function normalizeSearch(value) {
+function normalizeSearch(value: RankValue) {
   return String(value || "")
     .toLowerCase()
     .replaceAll("&", " and ")
@@ -78,31 +168,33 @@ function normalizeSearch(value) {
     .trim();
 }
 
-function searchTokens(value) {
+function searchTokens(value: string) {
   return normalizeSearch(value).split(" ").filter(Boolean);
 }
 
-function selectedValues(value) {
-  return Array.isArray(value) ? value : value && value !== ALL ? [value] : [];
+function selectedValues(value: string[] | string | number | null | undefined) {
+  return Array.isArray(value) ? value.map(String) : value && value !== ALL ? [String(value)] : [];
 }
 
-function decodeList(value) {
+function decodeList(value: string | null) {
   return value ? value.split("|").map(decodeURIComponent).filter(Boolean) : [];
 }
 
-function encodeList(values) {
+function encodeList(values: string[] | string | number | null | undefined) {
   return selectedValues(values).map(encodeURIComponent).join("|");
 }
 
-function initialFiltersFromUrl() {
+function initialFiltersFromUrl(): Filters {
   const params = new URLSearchParams(window.location.search);
+  const rankBasis = params.get("rankBasis") === "opening_rank" ? "opening_rank" : "closing_rank";
+
   return {
     ...emptyFilters,
     year: params.get("year") || "",
     compare_years: decodeList(params.get("compare_years")),
     round_no: params.get("round_no") || "",
     rank: params.get("rank") || "",
-    rankBasis: params.get("rankBasis") || "closing_rank",
+    rankBasis,
     institute: decodeList(params.get("institute")),
     academic_program: decodeList(params.get("academic_program")),
     quota: decodeList(params.get("quota")),
@@ -112,22 +204,22 @@ function initialFiltersFromUrl() {
   };
 }
 
-function optionSearchText(searchIndex, key, value) {
-  return normalizeSearch(`${value} ${searchIndex[key]?.[value] || ""}`);
+function optionSearchText(searchIndex: SearchIndex, key: string, value: RankValue) {
+  return normalizeSearch(`${value} ${searchIndex[key]?.[String(value)] || ""}`);
 }
 
-function optionMatchesSearch(searchIndex, key, value, query) {
+function optionMatchesSearch(searchIndex: SearchIndex, key: string, value: string, query: string) {
   const tokens = searchTokens(query);
   if (!tokens.length) return true;
   const haystack = optionSearchText(searchIndex, key, value);
   return tokens.every((token) => haystack.includes(token));
 }
 
-function isIit(value) {
+function isIit(value: RankValue) {
   return String(value).startsWith("Indian Institute of Technology");
 }
 
-function isTopFieldProgram(value) {
+function isTopFieldProgram(value: RankValue) {
   const program = normalizeSearch(value);
 
   return (
@@ -148,7 +240,7 @@ function isTopFieldProgram(value) {
   );
 }
 
-function specialPresetsFor(fieldKey, options, searchIndex) {
+function specialPresetsFor(fieldKey: MultiFilterKey, options: string[], searchIndex: SearchIndex) {
   if (fieldKey === "institute") {
     return [
       {
@@ -174,7 +266,7 @@ function specialPresetsFor(fieldKey, options, searchIndex) {
   return [];
 }
 
-function specialOptionRank(fieldKey, value) {
+function specialOptionRank(fieldKey: MultiFilterKey, value: string) {
   if (fieldKey === "institute") {
     const topIndex = TOP_7_IITS.indexOf(value);
     if (topIndex >= 0) return topIndex;
@@ -193,7 +285,7 @@ function specialOptionRank(fieldKey, value) {
   return 1000;
 }
 
-function rowMatchesSearch(searchIndex, row, query) {
+function rowMatchesSearch(searchIndex: SearchIndex, row: GroupedRow, query: string) {
   const tokens = searchTokens(query);
   if (!tokens.length) return true;
   const haystack = optionalFilterOrder
@@ -202,11 +294,11 @@ function rowMatchesSearch(searchIndex, row, query) {
   return tokens.every((token) => haystack.includes(token));
 }
 
-function rankSortValue(value) {
+function rankSortValue(value: RankValue) {
   return value == null || Number.isNaN(Number(value)) ? Number.POSITIVE_INFINITY : Number(value);
 }
 
-function compareAnalyzedRows(a, b) {
+function compareAnalyzedRows(a: AnalyzedRow, b: AnalyzedRow) {
   const order = { possible: 0, "not-possible": 1, "no-data": 2 };
   return (
     order[a.status] - order[b.status] ||
@@ -218,11 +310,11 @@ function compareAnalyzedRows(a, b) {
   );
 }
 
-function roundStatusOrder(status) {
+function roundStatusOrder(status: Status) {
   return { possible: 0, "not-possible": 1, "no-data": 2 }[status] ?? 3;
 }
 
-function groupKey(row) {
+function groupKey(row: CutoffRow) {
   return [
     row.institute,
     row.academic_program,
@@ -233,35 +325,39 @@ function groupKey(row) {
   ].join("\u001f");
 }
 
-function formatRank(value) {
+function formatRank(value: RankValue) {
   return value == null || !Number.isFinite(Number(value)) ? "-" : Number(value).toLocaleString();
 }
 
-function formatBuffer(value) {
+function formatBuffer(value: number | null | undefined) {
   if (value == null || !Number.isFinite(Number(value))) return "-";
   return value >= 0 ? `+${formatRank(value)}` : formatRank(value);
 }
 
-function bufferLabel(value, status) {
+function bufferLabel(value: number | null | undefined, status: Status) {
   if (status === "no-data" || value == null || !Number.isFinite(Number(value))) return "No data";
   if (value >= 1000) return "Safe";
   if (value >= 0) return "Close";
   return "Reach";
 }
 
-function minRank(values) {
+function minRank(values: RankValue[]) {
   const numericValues = values.map(Number).filter(Number.isFinite);
   return numericValues.length ? Math.min(...numericValues) : null;
 }
 
-function summarizeRounds(rounds) {
+function summarizeRounds(rounds: AnalyzedRound[]) {
   return rounds
     .map((round) => `${round.year} R${round.round_no}: ${formatRank(round.opening_rank)}-${formatRank(round.closing_rank)} (${statusLabel(round.status)})`)
     .join("; ");
 }
 
-function groupAnalyzedRows(rows, rank) {
-  const groups = new Map();
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function groupAnalyzedRows(rows: AnalyzedRow[], rank: number) {
+  const groups = new Map<string, GroupedRow>();
 
   for (const row of rows) {
     const key = groupKey(row);
@@ -275,10 +371,12 @@ function groupAnalyzedRows(rows, rank) {
         rounds: [],
         round_count: 0,
         rounds_label: "",
+        buffer: null,
+        buffer_label: "No data",
       });
     }
 
-    const group = groups.get(key);
+    const group = groups.get(key)!;
     group.rounds.push({
       year: row.year,
       round_no: row.round_no,
@@ -290,12 +388,12 @@ function groupAnalyzedRows(rows, rank) {
     });
   }
 
-  return [...groups.values()].map((group) => {
+  return [...groups.values()].map<GroupedRow>((group) => {
     const rounds = group.rounds.sort((a, b) => Number(a.year) - Number(b.year) || Number(a.round_no) - Number(b.round_no));
     const rankedRounds = rounds.filter((round) => round.cutoff_rank != null);
     const possibleRounds = rounds.filter((round) => round.status === "possible");
     const notPossibleRounds = rounds.filter((round) => round.status === "not-possible");
-    const status = possibleRounds.length ? "possible" : notPossibleRounds.length ? "not-possible" : "no-data";
+    const status: Status = possibleRounds.length ? "possible" : notPossibleRounds.length ? "not-possible" : "no-data";
     const statusRounds = status === "possible" ? possibleRounds : status === "not-possible" ? notPossibleRounds : rounds;
     const sortRound = statusRounds
       .slice()
@@ -320,7 +418,7 @@ function groupAnalyzedRows(rows, rank) {
   });
 }
 
-function compareGroupedRows(a, b) {
+function compareGroupedRows(a: GroupedRow, b: GroupedRow) {
   return (
     roundStatusOrder(a.status) - roundStatusOrder(b.status) ||
     rankSortValue(a.cutoff_rank) - rankSortValue(b.cutoff_rank) ||
@@ -331,20 +429,21 @@ function compareGroupedRows(a, b) {
   );
 }
 
-function uniqueOptions(rows, key) {
+function uniqueOptions(rows: CutoffRow[], key: OptionalFilterKey | "round_no") {
   return sortText(new Set(rows.map((row) => row[key]).filter((value) => value !== "" && value != null)));
 }
 
-function normalizeCutoffPayload(payload) {
+function normalizeCutoffPayload(payload: CutoffPayload): CutoffRow[] {
   if (Array.isArray(payload)) return payload;
   if (!Array.isArray(payload?.columns) || !Array.isArray(payload?.rows)) return [];
+  const { columns, rows } = payload;
 
-  return payload.rows.map((values) => {
-    return Object.fromEntries(payload.columns.map((column, index) => [column, values[index]]));
+  return rows.map((values) => {
+    return Object.fromEntries(columns.map((column, index) => [column, values[index]])) as CutoffRow;
   });
 }
 
-function applyFilterChain(rows, filters, stopBeforeKey) {
+function applyFilterChain(rows: CutoffRow[], filters: Filters | SubmittedFilters, stopBeforeKey?: OptionalFilterKey) {
   let filtered = rows;
 
   if (filters.year) {
@@ -360,15 +459,15 @@ function applyFilterChain(rows, filters, stopBeforeKey) {
     }
     const selected = selectedValues(filters[key]);
     if (selected.length) {
-      filtered = filtered.filter((row) => selected.includes(row[key]));
+      filtered = filtered.filter((row) => selected.includes(String(row[key])));
     }
   }
 
   return filtered;
 }
 
-function analyzeRow(row, rank, rankBasis) {
-  const cutoff = row[rankBasis];
+function analyzeRow(row: CutoffRow, rank: number, rankBasis: RankBasis): AnalyzedRow {
+  const cutoff = row[rankBasis] as RankValue;
   if (cutoff == null || Number.isNaN(Number(cutoff))) {
     return { ...row, cutoff_rank: null, status: "no-data" };
   }
@@ -379,14 +478,14 @@ function analyzeRow(row, rank, rankBasis) {
   };
 }
 
-function statusLabel(status) {
+function statusLabel(status: ResultStatus) {
   if (status === "possible") return "Possible";
   if (status === "not-possible") return "Not possible";
   if (status === "no-data") return "No cutoff";
   return "All statuses";
 }
 
-function csvEscape(value) {
+function csvEscape(value: unknown) {
   if (value == null) return "";
   const text = String(value);
   if (/[",\n]/.test(text)) {
@@ -395,7 +494,7 @@ function csvEscape(value) {
   return text;
 }
 
-function downloadCsv(rows) {
+function downloadCsv(rows: GroupedRow[]) {
   const columns = [
     "status",
     "year",
@@ -430,7 +529,7 @@ function MultiSelectFilter({
   fieldKey,
   onChange,
   onSearchChange,
-}) {
+}: MultiSelectFilterProps) {
   const selectedList = selectedValues(selected);
   const visibleOptions = options
     .filter((value) => optionMatchesSearch(searchIndex, fieldKey, value, searchValue))
@@ -441,7 +540,7 @@ function MultiSelectFilter({
   const renderedOptions = visibleOptions.slice(0, 120);
   const specialPresets = specialPresetsFor(fieldKey, options, searchIndex).filter((preset) => preset.values.length);
 
-  function toggleValue(value) {
+  function toggleValue(value: string) {
     if (selectedList.includes(value)) {
       onChange(selectedList.filter((selectedValue) => selectedValue !== value));
     } else {
@@ -513,16 +612,16 @@ function MultiSelectFilter({
 }
 
 function App() {
-  const [yearRows, setYearRows] = useState({});
-  const [availableYears, setAvailableYears] = useState([]);
-  const [searchIndex, setSearchIndex] = useState({});
+  const [yearRows, setYearRows] = useState<Record<string, CutoffRow[]>>({});
+  const [availableYears, setAvailableYears] = useState<ManifestEntry[]>([]);
+  const [searchIndex, setSearchIndex] = useState<SearchIndex>({});
   const [loadState, setLoadState] = useState("loading");
   const [yearLoadState, setYearLoadState] = useState("idle");
   const [filters, setFilters] = useState(initialFiltersFromUrl);
-  const [submitted, setSubmitted] = useState(null);
+  const [submitted, setSubmitted] = useState<SubmittedFilters | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [bestOnly, setBestOnly] = useState(false);
-  const [selectedDetail, setSelectedDetail] = useState(null);
+  const [selectedDetail, setSelectedDetail] = useState<GroupedRow | null>(null);
   const [resultFilters, setResultFilters] = useState(emptyResultFilters);
   const [filterSearches, setFilterSearches] = useState(emptyFilterSearches);
   const [resultFilterSearches, setResultFilterSearches] = useState(emptyFilterSearches);
@@ -538,14 +637,14 @@ function App() {
         .then((response) => (response.ok ? response.json() : {}))
         .catch(() => ({})),
     ])
-      .then(([manifest, index]) => {
+      .then(([manifest, index]: [{ years?: ManifestEntry[] }, SearchIndex]) => {
         const years = Array.isArray(manifest?.years) ? manifest.years : [];
         setAvailableYears(years);
         setSearchIndex(index && typeof index === "object" ? index : {});
         setLoadState("ready");
       })
-      .catch((loadError) => {
-        setError(loadError.message);
+      .catch((loadError: unknown) => {
+        setError(errorMessage(loadError));
         setLoadState("error");
       });
   }, []);
@@ -574,7 +673,7 @@ function App() {
           if (!response.ok) throw new Error(`Could not load /data/${yearEntry.file}`);
           return response.json();
         })
-        .then((data) => [year, normalizeCutoffPayload(data)]);
+        .then((data: CutoffPayload) => [year, normalizeCutoffPayload(data)] as const);
     }))
       .then((loadedYears) => {
         setYearRows((current) => {
@@ -584,9 +683,9 @@ function App() {
         });
         setYearLoadState("ready");
       })
-      .catch((loadError) => {
-        if (loadError.name === "AbortError") return;
-        setError(loadError.message);
+      .catch((loadError: unknown) => {
+        if (loadError instanceof Error && loadError.name === "AbortError") return;
+        setError(errorMessage(loadError));
         setYearLoadState("error");
       });
 
@@ -602,7 +701,7 @@ function App() {
   const roundOptions = useMemo(() => uniqueOptions(applyFilterChain(rows, filters, "institute"), "round_no"), [rows, filters]);
 
   const filterOptions = useMemo(() => {
-    const options = {};
+    const options = {} as Record<OptionalFilterKey, string[]>;
     for (const key of optionalFilterOrder) {
       options[key] = uniqueOptions(applyFilterChain(rows, filters, key), key);
     }
@@ -628,7 +727,7 @@ function App() {
       if (resultFilters.status !== ALL && row.status !== resultFilters.status) return false;
       for (const key of optionalFilterOrder) {
         const selected = selectedValues(resultFilters[key]);
-        if (selected.length && !selected.includes(row[key])) return false;
+        if (selected.length && !selected.includes(String(row[key]))) return false;
       }
       return rowMatchesSearch(searchIndex, row, search);
     });
@@ -636,7 +735,7 @@ function App() {
 
   const summary = useMemo(() => {
     return visibleResults.reduce(
-      (totals, row) => {
+      (totals: { total: number } & Record<Status, number>, row) => {
         totals.total += 1;
         totals[row.status] += 1;
         return totals;
@@ -646,21 +745,26 @@ function App() {
   }, [visibleResults]);
 
   const resultOptions = useMemo(() => {
-    const options = {};
+    const options = {} as Record<OptionalFilterKey, string[]>;
     for (const key of optionalFilterOrder) {
       options[key] = uniqueOptions(groupedResults, key);
     }
     return options;
   }, [groupedResults]);
 
-  function updateFilter(key, value) {
-    if (key === "rank" && value !== "" && !/^\d+$/.test(value)) {
+  function updateFilter(key: keyof Filters, value: string | string[]) {
+    if (key === "rank" && String(value) !== "" && !/^\d+$/.test(String(value))) {
       return;
     }
 
     setFilters((current) => {
-      const next = { ...current, [key]: value };
-      const startIndex = optionalFilterOrder.indexOf(key);
+      const next = { ...current };
+      if (key === "rankBasis") {
+        next.rankBasis = value === "opening_rank" ? "opening_rank" : "closing_rank";
+      } else {
+        Object.assign(next, { [key]: value });
+      }
+      const startIndex = optionalFilterOrder.indexOf(key as OptionalFilterKey);
       if (key === "year" || key === "round_no") {
         for (const optionalKey of optionalFilterOrder) next[optionalKey] = [];
       } else if (startIndex >= 0) {
@@ -674,12 +778,12 @@ function App() {
     });
   }
 
-  function updateShareUrl(nextFilters = submitted || filters) {
+  function updateShareUrl(nextFilters: Filters | SubmittedFilters = submitted || filters) {
     const params = new URLSearchParams();
-    for (const key of ["year", "round_no", "rank", "rankBasis"]) {
-      if (nextFilters[key]) params.set(key, nextFilters[key]);
+    for (const key of ["year", "round_no", "rank", "rankBasis"] as const) {
+      if (nextFilters[key]) params.set(key, String(nextFilters[key]));
     }
-    for (const key of ["compare_years", ...optionalFilterOrder]) {
+    for (const key of ["compare_years", ...optionalFilterOrder] as const) {
       const encoded = encodeList(nextFilters[key]);
       if (encoded) params.set(key, encoded);
     }
@@ -694,11 +798,11 @@ function App() {
     setError("Share link copied to this page URL.");
   }
 
-  function applyPreset(fieldKey, values) {
+  function applyPreset(fieldKey: OptionalFilterKey, values: string[]) {
     updateFilter(fieldKey, values);
   }
 
-  async function submitAnalysis(event) {
+  async function submitAnalysis(event?: React.FormEvent<HTMLFormElement> | React.MouseEvent<HTMLButtonElement>) {
     event?.preventDefault();
     const rank = Number(filters.rank);
     if (!filters.year || !Number.isInteger(rank) || rank <= 0) {
@@ -812,7 +916,7 @@ function App() {
           </label>
           <label>
             <span>{labels.rankBasis}</span>
-            <select value={filters.rankBasis} onChange={(event) => updateFilter("rankBasis", event.target.value)} required>
+            <select value={filters.rankBasis} onChange={(event) => updateFilter("rankBasis", event.target.value as RankBasis)} required>
               <option value="closing_rank">Closing rank</option>
               <option value="opening_rank">Opening rank</option>
             </select>
@@ -832,7 +936,7 @@ function App() {
           ))}
         </div>
         <div className="filter-actions">
-          <button type="submit" disabled={filters.year && yearLoadState !== "ready"}>Analyze rank</button>
+          <button type="submit" disabled={Boolean(filters.year && yearLoadState !== "ready")}>Analyze rank</button>
           <button type="button" className="secondary" onClick={copyShareUrl}>
             Copy/share link
           </button>
@@ -852,7 +956,7 @@ function App() {
             </label>
             <label>
               <span>{labels.status}</span>
-              <select value={resultFilters.status} onChange={(event) => setResultFilters((current) => ({ ...current, status: event.target.value }))}>
+              <select value={resultFilters.status} onChange={(event) => setResultFilters((current) => ({ ...current, status: event.target.value as ResultStatus }))}>
                 <option value={ALL}>All statuses</option>
                 <option value="possible">Possible</option>
                 <option value="not-possible">Not possible</option>
@@ -935,7 +1039,7 @@ function App() {
               </thead>
               <tbody>
                 {!submitted ? (
-                  <tr><td colSpan="12" className="empty-cell">Enter a year and rank, then submit to analyze results.</td></tr>
+                  <tr><td colSpan={12} className="empty-cell">Enter a year and rank, then submit to analyze results.</td></tr>
                 ) : visibleResults.length ? (
                   visibleResults.map((row, index) => (
                     <tr key={`${row.year}-${row.institute}-${row.academic_program}-${row.quota}-${row.seat_type}-${row.gender_pool}-${index}`} className={`row-${row.status}`}>
@@ -962,7 +1066,7 @@ function App() {
                     </tr>
                   ))
                 ) : (
-                  <tr><td colSpan="12" className="empty-cell">No rows match the current result filters.</td></tr>
+                  <tr><td colSpan={12} className="empty-cell">No rows match the current result filters.</td></tr>
                 )}
               </tbody>
             </table>

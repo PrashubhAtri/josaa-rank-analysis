@@ -34,12 +34,11 @@ Use:
 
 - React
 - Vite
-- JavaScript
+- TypeScript
 - Plain CSS
 
 Do not use:
 
-- TypeScript
 - Backend
 - Database
 - Tailwind
