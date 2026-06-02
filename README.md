@@ -79,15 +79,35 @@ Stage 3 (`build_static_data.py`) uses only the Python standard library and is th
 ## Project structure
 
 ```
-data/                       # data pipeline (Python)
-  fetch.py                  #   scrape JoSAA → raw CSV
-  fix.py                    #   clean CSVs
-  build_static_data.py      #   CSV → static JSON the app serves
-  raw/                      #   scraped cutoff CSVs (source data)
-frontend/                   # React + Vite app (TypeScript, plain CSS)
-  src/                      #   App.tsx, main.tsx, styles.css
-  public/data/              #   generated JSON the app fetches at runtime
+data/
+  raw/                         # scraped cutoff CSVs
+  fetch.py                     # scrape JoSAA → data/raw/*.csv
+  fix.py                       # clean raw CSV files
+  build_static_data.py         # build frontend/public/data/*.json
+  requirements.txt             # Python requirements for the data pipeline
+
+frontend/
+  public/data/                 # generated JSON fetched by the static app
+  src/
+    App.tsx                    # page state, data loading, and layout wiring
+    main.tsx                   # React entry point
+    styles.css                 # app-wide styling and responsive layouts
+    types.ts                   # shared TypeScript data shapes
+    config/
+      filters.ts               # filter labels, defaults, and preset constants
+    components/
+      filters/                 # reusable filter controls
+      ui/                      # small UI primitives
+      icons.tsx                # inline icons used by the app
+    lib/
+      browser.ts               # theme and paint helpers
+      csv.ts                   # CSV export
+      rank-analysis.ts         # cutoff analysis, grouping, sorting, formatting
+      search.ts                # search normalization and special presets
+      url-state.ts             # share-link and URL hydration helpers
 ```
+
+The app has no backend. Vite copies `frontend/public/data/` into the production build, and the browser fetches those files at runtime from `/data/...`.
 
 ## Tech
 
